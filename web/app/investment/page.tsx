@@ -4,8 +4,10 @@ import type { CapitalEvent, Closing, DocumentInfo, IcCase, Investment, Position 
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import { Suspense, useCallback, useEffect, useRef, useState } from 'react';
+import { AboutCompany } from '@/components/AboutCompany';
 import { AppShell } from '@/components/AppShell';
 import { CapitalEventForm } from '@/components/CapitalEventForm';
+import { CarryTermsPanel } from '@/components/CarryTermsPanel';
 import { ClosingForm } from '@/components/ClosingForm';
 import { ConfirmDialog, type ConfirmDialogHandle } from '@/components/ConfirmDialog';
 import { DeleteInvestment } from '@/components/DeleteInvestment';
@@ -27,6 +29,15 @@ import {
   usd,
   usdPrecise,
 } from '@/lib/format';
+
+type Tab = 'overview' | 'performance' | 'carry' | 'documents';
+
+const TABS: { id: Tab; label: string }[] = [
+  { id: 'overview', label: 'Overview' },
+  { id: 'performance', label: 'Performance' },
+  { id: 'carry', label: 'Carry' },
+  { id: 'documents', label: 'Documents' },
+];
 
 export default function InvestmentPage() {
   return (
@@ -50,6 +61,7 @@ function InvestmentDetail() {
   const [formOpen, setFormOpen] = useState(false);
   const [closingFormOpen, setClosingFormOpen] = useState(false);
   const [capitalEventFormOpen, setCapitalEventFormOpen] = useState(false);
+  const [tab, setTab] = useState<Tab>('overview');
   const [notice, setNotice] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const confirmDialog = useRef<ConfirmDialogHandle>(null);
@@ -152,18 +164,7 @@ function InvestmentDetail() {
         <span className={`pill ${investment.status}`}>{STATUS_LABELS[investment.status]}</span>
       </div>
 
-      <section className="panel">
-        <div className="panel-body">
-          <dl className="kv">
-            <div><dt>Deal lead</dt><dd>{investment.dealLead ?? '—'}</dd></div>
-            <div><dt>Fiscal year ends</dt><dd>{MONTHS[investment.fiscalYearEndMonth - 1]}</dd></div>
-            <div><dt>Added</dt><dd>{date(investment.createdAt)}{investment.createdBy ? ` by ${investment.createdBy}` : ''}</dd></div>
-            <div><dt>IC versions</dt><dd>{icCases.length}</dd></div>
-            <div><dt>Closings</dt><dd>{closings.length}</dd></div>
-            <div><dt>Capital events</dt><dd>{capitalEvents.length}</dd></div>
-          </dl>
-        </div>
-      </section>
+      <AboutCompany investment={investment} onSaved={setInvestment} />
 
       {notice && (
         <div className="alert alert-success" role="status">
@@ -201,7 +202,31 @@ function InvestmentDetail() {
       ) : (
         !formOpen && (
           <>
+            <nav className="tabs" aria-label="Investment sections">
+              {TABS.map((entry) => (
+                <button
+                  key={entry.id}
+                  type="button"
+                  className={`tab${tab === entry.id ? ' active' : ''}`}
+                  aria-current={tab === entry.id ? 'page' : undefined}
+                  onClick={() => setTab(entry.id)}
+                >
+                  {entry.label}
+                  {entry.id === 'documents' && documents.length > 0 ? <span className="tab-count">{documents.length}</span> : null}
+                </button>
+              ))}
+            </nav>
+
             {position && <PositionView position={position} />}
+
+            {tab === 'performance' && (
+              <ValuationHistory closings={closings} capitalEvents={capitalEvents} icCase={current} position={position} />
+            )}
+
+            {tab === 'carry' && <CarryTermsPanel investmentId={investment.id} companyName={investment.companyName} />}
+
+            {tab === 'overview' && (
+            <>
             <ClosingsView
               closings={closings}
               documents={documents}
@@ -220,11 +245,13 @@ function InvestmentDetail() {
               }}
               onDelete={deleteCapitalEvent}
             />
+            </>
+            )}
           </>
         )
       )}
 
-      {closingFormOpen || capitalEventFormOpen ? null : formOpen ? (
+      {closingFormOpen || capitalEventFormOpen || (tab !== 'overview' && !formOpen) ? null : formOpen ? (
         <IcCaseForm
           investmentId={investment.id}
           previous={current}
@@ -249,7 +276,7 @@ function InvestmentDetail() {
         <IcCaseView icCase={shown} isCurrent={shown.id === current?.id} closed={closings.length > 0} onRevise={() => setFormOpen(true)} />
       )}
 
-      {icCases.length > 0 && !formOpen && !closingFormOpen && !capitalEventFormOpen && (
+      {icCases.length > 0 && tab === 'overview' && !formOpen && !closingFormOpen && !capitalEventFormOpen && (
         <section className="panel">
           <div className="panel-head">
             <h2>IC versions</h2>
@@ -294,7 +321,7 @@ function InvestmentDetail() {
         </section>
       )}
 
-      {!formOpen && !closingFormOpen && !capitalEventFormOpen && (
+      {tab === 'documents' && !formOpen && !closingFormOpen && !capitalEventFormOpen && (
         <section className="panel">
           <div className="panel-head">
             <h2>Documents</h2>
@@ -356,7 +383,7 @@ function InvestmentDetail() {
         </section>
       )}
 
-      {!formOpen && !closingFormOpen && !capitalEventFormOpen && (
+      {tab === 'overview' && !formOpen && !closingFormOpen && !capitalEventFormOpen && (
         <DeleteInvestment investment={investment} icVersions={icCases.length} closings={closings.length} documents={documents} />
       )}
     </>
@@ -412,6 +439,106 @@ function PositionView({ position }: { position: Position }) {
           <div key={note} className="alert alert-info">{note}</div>
         ))}
       </div>
+    </section>
+  );
+}
+
+/** Performance tab: how the company has been valued over time, from closings and capital events. */
+function ValuationHistory({
+  closings,
+  capitalEvents,
+  icCase,
+  position,
+}: {
+  closings: Closing[];
+  capitalEvents: CapitalEvent[];
+  icCase: IcCase | null;
+  position: Position | null;
+}) {
+  const marks = [
+    ...closings
+      .filter((closing) => closing.postMoneyValuationUsd !== null)
+      .map((closing) => ({
+        date: closing.closeDate,
+        source: `Closing ${closing.closingNumber}`,
+        valuationUsd: closing.postMoneyValuationUsd as number,
+        ownershipPct: closing.ownershipPctAfter as number | null,
+      })),
+    ...capitalEvents
+      .filter((event) => event.impliedValuationUsd !== null)
+      .map((event) => ({
+        date: event.eventDate,
+        source: CAPITAL_EVENT_TYPE_LABELS[event.eventType],
+        valuationUsd: event.impliedValuationUsd as number,
+        ownershipPct: null as number | null,
+      })),
+  ].sort((a, b) => a.date.localeCompare(b.date));
+
+  const ownershipNow = position?.ownershipPct ?? null;
+  const costUsd = position?.costUsd ?? null;
+
+  return (
+    <section className="panel">
+      <div className="panel-head">
+        <div>
+          <h2>Valuation history</h2>
+          <p className="subtle" style={{ fontSize: 14 }}>
+            Every valuation recorded for the company, from closings and capital events. Stake value uses current ownership
+            {ownershipNow === null ? '' : ` of ${percent(ownershipNow)}`}.
+          </p>
+        </div>
+      </div>
+      {marks.length === 0 ? (
+        <div className="panel-body">
+          <p className="subtle">
+            No valuations recorded yet. A closing with a post-money valuation, or a capital event with an implied valuation, appears here.
+          </p>
+        </div>
+      ) : (
+        <div className="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Date</th>
+                <th>Source</th>
+                <th className="num">Company valuation</th>
+                <th className="num">Ownership</th>
+                <th className="num">Stake value</th>
+                <th className="num">vs cost</th>
+              </tr>
+            </thead>
+            <tbody>
+              {marks.map((mark, index) => {
+                const ownership = mark.ownershipPct ?? ownershipNow;
+                const stake = ownership === null ? null : (mark.valuationUsd * ownership) / 100;
+                const versusCost = stake !== null && costUsd ? stake / costUsd : null;
+                return (
+                  <tr key={`${mark.date}-${index}`}>
+                    <td>{date(mark.date)}</td>
+                    <td>{mark.source}</td>
+                    <td className="num">{usd(mark.valuationUsd)}</td>
+                    <td className="num">{percent(ownership)}</td>
+                    <td className="num">{usd(stake)}</td>
+                    <td className="num">{multiple(versusCost)}</td>
+                  </tr>
+                );
+              })}
+              {icCase && (
+                <tr>
+                  <td>31 Dec {icCase.exitYear}</td>
+                  <td>
+                    IC exit assumption <span className="tag">v{icCase.version}</span>
+                  </td>
+                  <td className="num">{usd(icCase.exitValuationUsd)}</td>
+                  <td className="num">{percent(icCase.exitOwnershipPct)}</td>
+                  <td className="num">{usd(position?.projectedProceedsUsd ?? icCase.projectedProceedsUsd)}</td>
+                  <td className="num">{multiple(position?.projectedMoic ?? icCase.projectedMoic)}</td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      )}
     </section>
   );
 }

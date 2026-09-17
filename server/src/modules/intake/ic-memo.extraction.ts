@@ -4,7 +4,7 @@ import { asRecord, createReaders, object, readSources, readWarnings, SOURCES_SCH
 // What Claude is asked to read from an IC memo, and how its answer is checked before anyone sees it.
 // Bump the prompt version whenever the prompt or schema changes; it's stored with every extraction.
 
-export const IC_MEMO_PROMPT_VERSION = 'ic-memo-2026-09-17b';
+export const IC_MEMO_PROMPT_VERSION = 'ic-memo-2026-09-17c';
 
 /** Keep in step with the instrument list on the New investment page. */
 export const INSTRUMENTS = ['Preferred equity', 'Common equity', 'SAFE', 'Convertible note', 'Venture debt', 'Fund commitment', 'Other'];
@@ -12,6 +12,7 @@ export const INSTRUMENTS = ['Preferred equity', 'Common equity', 'SAFE', 'Conver
 export const IC_MEMO_SCHEMA = object({
   company: object({
     companyName: TEXT,
+    businessSummary: TEXT,
     sector: TEXT,
     geography: TEXT,
     instrument: { type: 'string', enum: [...INSTRUMENTS, ''] },
@@ -48,6 +49,7 @@ Currency: the portfolio system works only in US dollars.
 
 Field meanings:
 - company.companyName: the portfolio company's legal or trading name, not NKSquared's.
+- company.businessSummary: two or three sentences on what the company does, in plain language: what it sells, to whom, and its scale or stage (revenue, users or customers) if the memo gives it. Describe the company, not the investment case.
 - company.instrument: the closest match to the security NKSquared is buying.
 - company.dealLead: the NKSquared person leading or sponsoring the deal, if named.
 - company.fiscalYearEndMonth: 1–12, only if the memo states the company's financial year end.
@@ -96,6 +98,7 @@ export function normaliseIcMemo(raw: unknown): Normalised {
   return {
     investment: {
       companyName: text(company.companyName),
+      businessSummary: text(company.businessSummary, 2000),
       sector: text(company.sector, 100),
       geography: text(company.geography, 100),
       instrument: instrument && INSTRUMENTS.includes(instrument) ? instrument : null,

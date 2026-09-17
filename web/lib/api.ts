@@ -35,7 +35,7 @@ async function handle<T>(response: Response, path: string): Promise<T> {
   return (await response.json()) as T;
 }
 
-export async function api<T>(path: string, options: { method?: 'GET' | 'POST' | 'DELETE'; body?: unknown } = {}): Promise<T> {
+export async function api<T>(path: string, options: { method?: 'GET' | 'POST' | 'PUT' | 'DELETE'; body?: unknown } = {}): Promise<T> {
   const method = options.method ?? 'GET';
   const response = await fetch(`/api${path}`, {
     method,

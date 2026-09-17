@@ -31,6 +31,8 @@ export interface Investment {
   id: number;
   companyId: number;
   companyName: string;
+  /** Two or three sentences on what the company does, read from the IC memo or written by hand. */
+  businessSummary: string | null;
   sector: string | null;
   geography: string | null;
   fiscalYearEndMonth: number;
@@ -43,11 +45,16 @@ export interface Investment {
 
 export interface CreateInvestmentRequest {
   companyName: string;
+  businessSummary?: string | null;
   sector?: string | null;
   geography?: string | null;
   fiscalYearEndMonth: number;
   instrument: string;
   dealLead?: string | null;
+}
+
+export interface UpdateBusinessSummaryRequest {
+  businessSummary: string | null;
 }
 
 // ---- IC Case ----
@@ -340,6 +347,7 @@ export interface IcMemoExtraction {
   model: string;
   investment: {
     companyName: string | null;
+    businessSummary: string | null;
     sector: string | null;
     geography: string | null;
     instrument: string | null;

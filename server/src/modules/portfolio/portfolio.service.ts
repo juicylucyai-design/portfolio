@@ -21,6 +21,13 @@ export class PortfolioService {
     return this.get(id);
   }
 
+  /** Updates the short description of what the company does. */
+  async setBusinessSummary(id: number, summary: string | null): Promise<Investment> {
+    await this.get(id);
+    await this.repository.updateBusinessSummary(id, summary);
+    return this.get(id);
+  }
+
   /**
    * Removes the investment row itself. Only the Lifecycle module calls this, after it has removed
    * everything other modules hold for the investment.

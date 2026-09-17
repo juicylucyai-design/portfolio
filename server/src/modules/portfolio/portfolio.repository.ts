@@ -6,6 +6,7 @@ interface InvestmentRow {
   id: number;
   company_id: number;
   company_name: string;
+  business_summary: string | null;
   sector: string | null;
   geography: string | null;
   fiscal_year_end_month: number;
@@ -17,7 +18,7 @@ interface InvestmentRow {
 }
 
 const SELECT_INVESTMENT = `
-  SELECT i.id, i.company_id, c.name AS company_name, c.sector, c.geography, c.fiscal_year_end_month,
+  SELECT i.id, i.company_id, c.name AS company_name, c.business_summary, c.sector, c.geography, c.fiscal_year_end_month,
          i.instrument, i.deal_lead, i.status, i.created_by, i.created_at
   FROM investments i
   JOIN companies c ON c.id = i.company_id`;
@@ -26,6 +27,7 @@ const toInvestment = (row: InvestmentRow): Investment => ({
   id: row.id,
   companyId: row.company_id,
   companyName: row.company_name,
+  businessSummary: row.business_summary,
   sector: row.sector,
   geography: row.geography,
   fiscalYearEndMonth: row.fiscal_year_end_month,
@@ -54,9 +56,9 @@ export class PortfolioRepository {
   async create(input: CreateInvestmentRequest, createdBy: string): Promise<number> {
     return this.db.transaction(async (tx) => {
       const [company] = await tx.query<{ id: number }>(
-        `INSERT INTO companies (name, sector, geography, fiscal_year_end_month)
-         VALUES ($1, $2, $3, $4) RETURNING id`,
-        [input.companyName, input.sector ?? null, input.geography ?? null, input.fiscalYearEndMonth],
+        `INSERT INTO companies (name, business_summary, sector, geography, fiscal_year_end_month)
+         VALUES ($1, $2, $3, $4, $5) RETURNING id`,
+        [input.companyName, input.businessSummary ?? null, input.sector ?? null, input.geography ?? null, input.fiscalYearEndMonth],
       );
       const [investment] = await tx.query<{ id: number }>(
         `INSERT INTO investments (company_id, instrument, deal_lead, created_by)
@@ -65,6 +67,14 @@ export class PortfolioRepository {
       );
       return investment.id;
     });
+  }
+
+  /** The summary belongs to the company, so it follows every investment in that company. */
+  async updateBusinessSummary(investmentId: number, summary: string | null): Promise<void> {
+    await this.db.query(
+      'UPDATE companies SET business_summary = $2 WHERE id = (SELECT company_id FROM investments WHERE id = $1)',
+      [investmentId, summary],
+    );
   }
 
   async updateStatus(id: number, status: InvestmentStatus): Promise<void> {
