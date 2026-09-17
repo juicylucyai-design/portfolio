@@ -18,6 +18,8 @@ async function bootstrap(): Promise<void> {
   app.disable('x-powered-by');
   app.use(securityHeaders);
   app.use(cookieParser());
+  // PDF uploads arrive as the raw file body (no multipart parsing), capped just above the 20 MB document limit.
+  app.useBodyParser('raw', { type: 'application/pdf', limit: '21mb' });
   app.setGlobalPrefix('api');
 
   await runMigrations(app.get(Db));

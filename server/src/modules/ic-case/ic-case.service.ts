@@ -39,6 +39,11 @@ export class IcCaseService {
     return created;
   }
 
+  /** Only the Lifecycle module calls this, when an investment is deleted. */
+  deleteForInvestment(investmentId: number): Promise<number> {
+    return this.repository.deleteForInvestment(investmentId);
+  }
+
   private checkDates(input: IcCaseInput): void {
     const exitDate = exitDateFor(input.exitYear);
     const lastTranche = input.tranches.map((tranche) => tranche.expectedDate).sort().at(-1);

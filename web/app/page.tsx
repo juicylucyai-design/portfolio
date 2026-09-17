@@ -6,13 +6,26 @@ import { useRouter } from 'next/navigation';
 import { useEffect, useMemo, useState } from 'react';
 import { AppShell } from '@/components/AppShell';
 import { api } from '@/lib/api';
-import { multiple, rate, STATUS_LABELS, usd, usdCompact } from '@/lib/format';
+import { fileSize, multiple, rate, STATUS_LABELS, usd, usdCompact } from '@/lib/format';
 
 export default function DashboardPage() {
   const router = useRouter();
   const [investments, setInvestments] = useState<Investment[] | null>(null);
   const [summaries, setSummaries] = useState<Map<number, IcCaseSummary>>(new Map());
   const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
+
+  useEffect(() => {
+    // Confirmation after deleting an investment, then tidy the URL.
+    const params = new URLSearchParams(window.location.search);
+    const deleted = params.get('deleted');
+    if (deleted) {
+      const documents = Number(params.get('documents') ?? 0);
+      const freed = Number(params.get('freed') ?? 0);
+      setNotice(`Deleted ${deleted}${documents ? `, including ${documents} document${documents === 1 ? '' : 's'} (${fileSize(freed)})` : ''}.`);
+      window.history.replaceState(null, '', '/');
+    }
+  }, []);
 
   useEffect(() => {
     // The View composes two modules' public endpoints; neither module needs to know about the other.
@@ -43,6 +56,11 @@ export default function DashboardPage() {
         </Link>
       </div>
 
+      {notice && (
+        <div className="alert alert-success" role="status">
+          {notice}
+        </div>
+      )}
       {error && <div className="alert alert-error">{error}</div>}
 
       <section className="stats" aria-label="Portfolio summary">

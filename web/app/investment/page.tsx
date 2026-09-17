@@ -1,13 +1,14 @@
 'use client';
 
-import type { IcCase, Investment } from '@nksq/contracts';
+import type { DocumentInfo, IcCase, Investment } from '@nksq/contracts';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import { Suspense, useCallback, useEffect, useState } from 'react';
 import { AppShell } from '@/components/AppShell';
+import { DeleteInvestment } from '@/components/DeleteInvestment';
 import { IcCaseForm } from '@/components/IcCaseForm';
-import { api } from '@/lib/api';
-import { date, MONTHS, multiple, percent, rate, STATUS_LABELS, usd } from '@/lib/format';
+import { api, documentUrl } from '@/lib/api';
+import { date, DOCUMENT_CATEGORY_LABELS, fileSize, MONTHS, multiple, percent, rate, STATUS_LABELS, usd } from '@/lib/format';
 
 export default function InvestmentPage() {
   return (
@@ -23,14 +24,20 @@ function InvestmentDetail() {
   const id = Number(useSearchParams().get('id'));
   const [investment, setInvestment] = useState<Investment | null>(null);
   const [icCases, setIcCases] = useState<IcCase[]>([]);
+  const [documents, setDocuments] = useState<DocumentInfo[]>([]);
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const [formOpen, setFormOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
-    const [inv, cases] = await Promise.all([api<Investment>(`/investments/${id}`), api<IcCase[]>(`/investments/${id}/ic-cases`)]);
+    const [inv, cases, docs] = await Promise.all([
+      api<Investment>(`/investments/${id}`),
+      api<IcCase[]>(`/investments/${id}/ic-cases`),
+      api<DocumentInfo[]>(`/investments/${id}/documents`),
+    ]);
     setInvestment(inv);
     setIcCases(cases);
+    setDocuments(docs);
     return cases;
   }, [id]);
 
@@ -150,6 +157,66 @@ function InvestmentDetail() {
           </div>
         </section>
       )}
+
+      {!formOpen && (
+        <section className="panel">
+          <div className="panel-head">
+            <h2>Documents</h2>
+            <span className="subtle" style={{ fontSize: 13 }}>
+              {documents.length === 0 ? 'None yet' : `${documents.length} · ${fileSize(documents.reduce((sum, d) => sum + d.sizeBytes, 0))}`}
+            </span>
+          </div>
+          {documents.length === 0 ? (
+            <div className="panel-body">
+              <p className="subtle">No documents saved with this investment. IC memos uploaded on the New investment page appear here.</p>
+            </div>
+          ) : (
+            <div className="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>File</th>
+                    <th>Type</th>
+                    <th className="num">Size</th>
+                    <th>Uploaded</th>
+                    <th />
+                  </tr>
+                </thead>
+                <tbody>
+                  {documents.map((document) => {
+                    const icVersion = document.recordType === 'IC_CASE' ? icCases.find((c) => c.id === document.recordId)?.version : undefined;
+                    return (
+                      <tr key={document.id}>
+                        <td>
+                          <a href={documentUrl(document.id)} target="_blank" rel="noreferrer">
+                            {document.fileName}
+                          </a>
+                        </td>
+                        <td>
+                          {DOCUMENT_CATEGORY_LABELS[document.category]}
+                          {icVersion ? <span className="tag" style={{ marginLeft: 6 }}>IC v{icVersion}</span> : null}
+                        </td>
+                        <td className="num">{fileSize(document.sizeBytes)}</td>
+                        <td>
+                          {date(document.uploadedAt)}
+                          {document.uploadedBy ? <span className="subtle"> by {document.uploadedBy}</span> : null}
+                        </td>
+                        <td className="num">
+                          <a className="btn btn-small" href={documentUrl(document.id, true)}>
+                            Download
+                          </a>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </section>
+      )}
+
+      {!formOpen && <DeleteInvestment investment={investment} icVersions={icCases.length} documents={documents} />}
     </>
   );
 }

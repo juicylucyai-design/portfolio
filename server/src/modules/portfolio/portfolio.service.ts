@@ -21,6 +21,15 @@ export class PortfolioService {
     return this.get(id);
   }
 
+  /**
+   * Removes the investment row itself. Only the Lifecycle module calls this, after it has removed
+   * everything other modules hold for the investment.
+   */
+  async delete(id: number): Promise<void> {
+    await this.get(id);
+    await this.repository.delete(id);
+  }
+
   /** Called by IC Case when an approval is recorded. Status only ever moves forward. */
   async markIcApproved(id: number): Promise<void> {
     const investment = await this.get(id);

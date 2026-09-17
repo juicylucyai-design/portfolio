@@ -27,7 +27,23 @@ export const date = (isoDate: string) =>
     timeZone: 'UTC',
   });
 
-export const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+export const fileSize = (bytes: number) => {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+};
+
+export const DOCUMENT_CATEGORY_LABELS: Record<string, string> = {
+  IC_MEMO: 'IC memo',
+  CLOSING: 'Closing',
+  CAPITAL_EVENT: 'Capital event',
+  STATEMENT: 'Statement',
+  OTHER: 'Other',
+};
+
+export const INSTRUMENTS = ['Preferred equity', 'Common equity', 'SAFE', 'Convertible note', 'Venture debt', 'Fund commitment', 'Other'];
+
+export const MONTHS =['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
 
 export const STATUS_LABELS: Record<InvestmentStatus, string> = {
   PIPELINE: 'Pipeline',

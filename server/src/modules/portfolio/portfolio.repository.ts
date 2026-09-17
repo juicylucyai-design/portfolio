@@ -70,4 +70,16 @@ export class PortfolioRepository {
   async updateStatus(id: number, status: InvestmentStatus): Promise<void> {
     await this.db.query('UPDATE investments SET status = $1 WHERE id = $2', [status, id]);
   }
+
+  /** Deletes the investment, and its company if no other investment refers to it. */
+  async delete(id: number): Promise<void> {
+    await this.db.transaction(async (tx) => {
+      const [deleted] = await tx.query<{ company_id: number }>('DELETE FROM investments WHERE id = $1 RETURNING company_id', [id]);
+      if (!deleted) return;
+      await tx.query(
+        'DELETE FROM companies c WHERE c.id = $1 AND NOT EXISTS (SELECT 1 FROM investments i WHERE i.company_id = c.id)',
+        [deleted.company_id],
+      );
+    });
+  }
 }

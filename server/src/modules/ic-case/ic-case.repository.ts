@@ -93,6 +93,12 @@ export class IcCaseRepository {
     }));
   }
 
+  /** Deletes every version and its tranches (tranches cascade). Returns how many versions were removed. */
+  async deleteForInvestment(investmentId: number): Promise<number> {
+    const rows = await this.db.query<{ id: number }>('DELETE FROM ic_cases WHERE investment_id = $1 RETURNING id', [investmentId]);
+    return rows.length;
+  }
+
   /** Adds the next version and marks the previous one superseded, in one transaction. Returns the new id. */
   async createVersion(investmentId: number, input: IcCaseInput, projection: IcProjection, createdBy: string): Promise<number> {
     return this.db.transaction(async (tx) => {
