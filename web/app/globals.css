@@ -253,6 +253,12 @@ tfoot td { font-weight: 600; background: var(--surface-2); border-top: 1px solid
 .check { display: inline-flex; align-items: center; gap: 8px; font-size: 14px; font-weight: 600; cursor: pointer; }
 .check input { width: 16px; height: 16px; accent-color: var(--accent); }
 
+/* ---------- Closing form ---------- */
+.expense-row { display: grid; grid-template-columns: minmax(150px, 1fr) minmax(160px, 1.6fr) minmax(140px, 1fr) 34px; gap: 8px; align-items: center; }
+@media (max-width: 720px) { .expense-row { grid-template-columns: 1fr 1fr 34px; } .expense-row > input { grid-column: 1 / 3; } }
+.linklike { border: 0; background: none; padding: 0; color: var(--accent); font: inherit; font-weight: 600; cursor: pointer; }
+.linklike:hover { text-decoration: underline; }
+
 /* ---------- Delete ---------- */
 .btn-danger { background: var(--red); border-color: var(--red); color: #fff; }
 .btn-danger:hover { background: var(--red); filter: brightness(1.08); }

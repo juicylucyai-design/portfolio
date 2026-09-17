@@ -108,6 +108,94 @@ export interface IcCaseSummary {
   projectedMoic: number;
   projectedIrr: number | null;
   exitYear: number;
+  exitValuationUsd: number;
+  entryOwnershipPct: number;
+  dilutionToExitPct: number;
+  trancheCount: number;
+}
+
+// ---- Closing: what actually happened. Replaces the IC approval as the record of the transaction. ----
+
+export type ExpenseCategory = 'LEGAL' | 'DUE_DILIGENCE' | 'STAMP_DUTY' | 'ADVISORY' | 'OTHER';
+
+export interface ClosingExpenseInput {
+  category: ExpenseCategory;
+  description: string | null;
+  amountUsd: number;
+}
+
+export interface ClosingInput {
+  closeDate: string; // YYYY-MM-DD
+  /** Which IC tranche this closing draws, or null if it isn't tied to one. */
+  icTrancheNumber: number | null;
+  securityClass: string | null;
+  sharesAllotted: number;
+  pricePerShareUsd: number;
+  amountInvestedUsd: number;
+  /** Currency actually paid (ISO code). Amounts above are always USD. */
+  originalCurrency: string;
+  originalAmount: number | null;
+  originalPricePerShare: number | null;
+  /** US dollars per one unit of originalCurrency. */
+  fxRateUsdPerUnit: number | null;
+  postMoneyValuationUsd: number | null;
+  fullyDilutedSharesAfter: number | null;
+  /** NKSquared's fully diluted ownership after this closing, 0–100. */
+  ownershipPctAfter: number;
+  notes: string | null;
+  expenses: ClosingExpenseInput[];
+}
+
+export interface Closing extends ClosingInput {
+  id: number;
+  investmentId: number;
+  closingNumber: number;
+  expensesTotalUsd: number;
+  /** Amount invested plus expenses. */
+  totalCostUsd: number;
+  createdBy: string | null;
+  createdAt: string;
+}
+
+export interface SaveClosingRequest {
+  /** The uploaded closing PDF, or null to record the closing without one. */
+  documentId: number | null;
+  closing: ClosingInput;
+}
+
+export interface SaveClosingResponse {
+  closing: Closing;
+  document: DocumentInfo | null;
+  status: InvestmentStatus;
+}
+
+// ---- Performance: the current position ----
+
+/**
+ * The de facto position. Once any closing exists it is built from closings only (basis CLOSING);
+ * before that it shows the IC approval (basis IC). Exit assumptions always come from the latest IC version.
+ */
+export interface Position {
+  investmentId: number;
+  basis: 'CLOSING' | 'IC' | 'NONE';
+  closingCount: number;
+  lastCloseDate: string | null;
+  investedUsd: number | null;
+  expensesUsd: number | null;
+  /** Invested plus expenses for closings; IC commitment before any closing. */
+  costUsd: number | null;
+  sharesHeld: number | null;
+  ownershipPct: number | null;
+  icVersion: number | null;
+  icCommitmentUsd: number | null;
+  undrawnCommitmentUsd: number | null;
+  exitYear: number | null;
+  exitValuationUsd: number | null;
+  dilutionToExitPct: number | null;
+  projectedProceedsUsd: number | null;
+  projectedMoic: number | null;
+  projectedIrr: number | null;
+  notes: string[];
 }
 
 // ---- Documents ----
@@ -173,6 +261,32 @@ export interface IcMemoExtraction {
   warnings: string[];
 }
 
+/** Everything Claude could read from closing documents. Every value can be null when not stated. */
+export interface ClosingExtraction {
+  extractionId: number;
+  documentId: number;
+  model: string;
+  closing: {
+    closeDate: string | null;
+    trancheNumber: number | null;
+    securityClass: string | null;
+    sharesAllotted: number | null;
+    pricePerShareUsd: number | null;
+    amountInvestedUsd: number | null;
+    originalCurrency: string | null;
+    originalAmount: number | null;
+    originalPricePerShare: number | null;
+    fxRateUsdPerUnit: number | null;
+    postMoneyValuationUsd: number | null;
+    fullyDilutedSharesAfter: number | null;
+    ownershipPctAfter: number | null;
+    notes: string | null;
+    expenses: { category: ExpenseCategory; description: string | null; amountUsd: number | null }[];
+  };
+  sources: { field: string; page: number | null; quote: string }[];
+  warnings: string[];
+}
+
 // ---- Lifecycle: create from an IC memo, delete everything ----
 
 export interface CreateFromIcMemoRequest {
@@ -197,6 +311,7 @@ export interface DeleteInvestmentResult {
   investmentId: number;
   companyName: string;
   icCasesDeleted: number;
+  closingsDeleted: number;
   documentsDeleted: number;
   bytesFreed: number;
   extractionsDeleted: number;

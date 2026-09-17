@@ -1,5 +1,5 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
-import type { CreateInvestmentRequest, Investment, SessionUser } from '@nksq/contracts';
+import type { CreateInvestmentRequest, Investment, InvestmentStatus, SessionUser } from '@nksq/contracts';
 import { PortfolioRepository } from './portfolio.repository';
 
 @Injectable()
@@ -28,6 +28,18 @@ export class PortfolioService {
   async delete(id: number): Promise<void> {
     await this.get(id);
     await this.repository.delete(id);
+  }
+
+  /**
+   * Sets the deal-stage status after closings change. Only moves between the pre-investment and closing
+   * stages; later stages (active, exited, written off) are never overwritten here.
+   */
+  async setDealStage(id: number, status: 'PIPELINE' | 'IC_APPROVED' | 'PARTLY_DRAWN' | 'CLOSED'): Promise<InvestmentStatus> {
+    const investment = await this.get(id);
+    const dealStages: InvestmentStatus[] = ['PIPELINE', 'IC_APPROVED', 'PARTLY_DRAWN', 'CLOSED'];
+    if (!dealStages.includes(investment.status) || investment.status === status) return investment.status;
+    await this.repository.updateStatus(id, status);
+    return status;
   }
 
   /** Called by IC Case when an approval is recorded. Status only ever moves forward. */

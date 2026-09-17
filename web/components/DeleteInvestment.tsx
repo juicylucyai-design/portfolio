@@ -6,7 +6,7 @@ import { api } from '@/lib/api';
 import { fileSize } from '@/lib/format';
 
 /** Danger zone: deletes the investment with every IC version, document and extraction, after typing the name. */
-export function DeleteInvestment({ investment, icVersions, documents }: { investment: Investment; icVersions: number; documents: DocumentInfo[] }) {
+export function DeleteInvestment({ investment, icVersions, closings, documents }: { investment: Investment; icVersions: number; closings: number; documents: DocumentInfo[] }) {
   const dialog = useRef<HTMLDialogElement>(null);
   const [typed, setTyped] = useState('');
   const [error, setError] = useState<string | null>(null);
@@ -43,7 +43,7 @@ export function DeleteInvestment({ investment, icVersions, documents }: { invest
         <div>
           <h2>Delete investment</h2>
           <p className="subtle" style={{ fontSize: 14 }}>
-            For deals that didn't go ahead or were entered by mistake. Removes the investment, its IC versions and every saved document.
+            For deals that didn't go ahead or were entered by mistake. Removes the investment, its IC versions, closings and every saved document.
           </p>
         </div>
         <button type="button" className="btn btn-danger" onClick={open}>
@@ -57,6 +57,11 @@ export function DeleteInvestment({ investment, icVersions, documents }: { invest
           <p>This permanently deletes:</p>
           <ul>
             <li>the investment record</li>
+            {closings > 0 && (
+              <li>
+                {closings} closing{closings === 1 ? '' : 's'} and {closings === 1 ? 'its' : 'their'} expenses
+              </li>
+            )}
             <li>
               {icVersions} IC version{icVersions === 1 ? '' : 's'} and {icVersions === 1 ? 'its' : 'their'} tranches
             </li>

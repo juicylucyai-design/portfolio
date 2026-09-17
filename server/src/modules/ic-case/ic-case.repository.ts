@@ -79,8 +79,10 @@ export class IcCaseRepository {
 
   /** The current (latest) version of every investment that has one. */
   async latestSummaries(): Promise<IcCaseSummary[]> {
-    const rows = await this.db.query<IcCaseRow>(
-      'SELECT DISTINCT ON (investment_id) * FROM ic_cases ORDER BY investment_id, version DESC',
+    const rows = await this.db.query<IcCaseRow & { tranche_count: number }>(
+      `SELECT DISTINCT ON (c.investment_id) c.*,
+              (SELECT count(*)::int FROM ic_tranches t WHERE t.ic_case_id = c.id) AS tranche_count
+       FROM ic_cases c ORDER BY c.investment_id, c.version DESC`,
     );
     return rows.map((row) => ({
       investmentId: row.investment_id,
@@ -90,6 +92,10 @@ export class IcCaseRepository {
       projectedMoic: row.projected_moic,
       projectedIrr: row.projected_irr,
       exitYear: row.exit_year,
+      exitValuationUsd: row.exit_valuation_usd,
+      entryOwnershipPct: row.entry_ownership_pct,
+      dilutionToExitPct: row.dilution_to_exit_pct,
+      trancheCount: row.tranche_count,
     }));
   }
 

@@ -1,57 +1,37 @@
 import type { IcMemoExtraction } from '@nksq/contracts';
+import { asRecord, createReaders, object, readSources, readWarnings, SOURCES_SCHEMA, TEXT, WARNINGS_SCHEMA } from './extraction-helpers';
 
 // What Claude is asked to read from an IC memo, and how its answer is checked before anyone sees it.
-// Bump PROMPT_VERSION whenever the prompt or schema changes; it's stored with every extraction.
+// Bump the prompt version whenever the prompt or schema changes; it's stored with every extraction.
 
 export const IC_MEMO_PROMPT_VERSION = 'ic-memo-2026-09-17b';
 
 /** Keep in step with the instrument list on the New investment page. */
 export const INSTRUMENTS = ['Preferred equity', 'Common equity', 'SAFE', 'Convertible note', 'Venture debt', 'Fund commitment', 'Other'];
 
-// Every extracted value is a plain string, and an empty string means "not in the memo".
-// Nullable (anyOf) fields are deliberately avoided: the API caps a schema at 16 of them because each one
-// multiplies compilation cost. normaliseIcMemo() below turns the strings into checked numbers and dates.
-const text = { type: 'string' };
-const object = (properties: Record<string, unknown>) => ({
-  type: 'object',
-  properties,
-  required: Object.keys(properties),
-  additionalProperties: false,
-});
-
 export const IC_MEMO_SCHEMA = object({
   company: object({
-    companyName: text,
-    sector: text,
-    geography: text,
+    companyName: TEXT,
+    sector: TEXT,
+    geography: TEXT,
     instrument: { type: 'string', enum: [...INSTRUMENTS, ''] },
-    dealLead: text,
-    fiscalYearEndMonth: text,
+    dealLead: TEXT,
+    fiscalYearEndMonth: TEXT,
   }),
   icCase: object({
-    approvedOn: text,
-    entryPostMoneyUsd: text,
-    entryOwnershipPct: text,
-    dilutionToExitPct: text,
-    exitYear: text,
-    exitValuationUsd: text,
-    notes: text,
-    tranches: {
-      type: 'array',
-      items: object({ amountUsd: text, expectedDate: text, milestone: text }),
-    },
+    approvedOn: TEXT,
+    entryPostMoneyUsd: TEXT,
+    entryOwnershipPct: TEXT,
+    dilutionToExitPct: TEXT,
+    exitYear: TEXT,
+    exitValuationUsd: TEXT,
+    notes: TEXT,
+    tranches: { type: 'array', items: object({ amountUsd: TEXT, expectedDate: TEXT, milestone: TEXT }) },
   }),
-  statedReturns: object({ irrPct: text, moic: text }),
-  currency: object({
-    memoCurrency: text,
-    convertedToUsd: { type: 'boolean' },
-    fxNote: text,
-  }),
-  sources: {
-    type: 'array',
-    items: object({ field: text, page: { type: 'integer' }, quote: text }),
-  },
-  warnings: { type: 'array', items: text },
+  statedReturns: object({ irrPct: TEXT, moic: TEXT }),
+  currency: object({ memoCurrency: TEXT, convertedToUsd: { type: 'boolean' }, fxNote: TEXT }),
+  sources: SOURCES_SCHEMA,
+  warnings: WARNINGS_SCHEMA,
 });
 
 export const IC_MEMO_SYSTEM_PROMPT = `You read investment committee (IC) memos for NKSquared, a private investment firm, and extract the figures its portfolio system needs to record a new investment and its IC-approved projection.
@@ -88,64 +68,17 @@ warnings: anything a reviewer should double-check: assumptions, derivations, con
 
 export const IC_MEMO_INSTRUCTION = 'Extract the IC memo fields from this document.';
 
-// ---------- Checking Claude's answer ----------
-
 type Normalised = Omit<IcMemoExtraction, 'extractionId' | 'documentId' | 'model'>;
 
-const asRecord = (value: unknown): Record<string, unknown> =>
-  value && typeof value === 'object' && !Array.isArray(value) ? (value as Record<string, unknown>) : {};
-
-const DATE = /^\d{4}-\d{2}-\d{2}$/;
-
-/**
- * Turns Claude's JSON into safe form values. Anything out of range becomes null with a warning,
- * so a misread figure is never silently saved.
- */
+/** Turns Claude's answer into checked form values. */
 export function normaliseIcMemo(raw: unknown): Normalised {
   const root = asRecord(raw);
   const company = asRecord(root.company);
   const ic = asRecord(root.icCase);
   const returns = asRecord(root.statedReturns);
   const currency = asRecord(root.currency);
-  const warnings = Array.isArray(root.warnings)
-    ? root.warnings.filter((w): w is string => typeof w === 'string').map((w) => w.slice(0, 500)).slice(0, 30)
-    : [];
-
-  const text = (value: unknown, max = 200): string | null => (typeof value === 'string' && value.trim() ? value.trim().slice(0, max) : null);
-
-  const isBlank = (value: unknown) => value === null || value === undefined || (typeof value === 'string' && value.trim() === '');
-
-  const number = (raw: unknown, label: string, range: { min?: number; max?: number; above?: number; below?: number; integer?: boolean }): number | null => {
-    if (isBlank(raw)) return null;
-    // Numbers arrive as strings; tolerate stray formatting like "25,000,000", "$25000000" or "24.5%".
-    const value = typeof raw === 'string' ? Number(raw.replace(/[,$%\s]/g, '')) : raw;
-    const ok =
-      typeof value === 'number' &&
-      Number.isFinite(value) &&
-      (!range.integer || Number.isInteger(value)) &&
-      (range.min === undefined || value >= range.min) &&
-      (range.max === undefined || value <= range.max) &&
-      (range.above === undefined || value > range.above) &&
-      (range.below === undefined || value < range.below);
-    if (!ok) {
-      warnings.push(`Ignored ${label} (${String(raw)}) because it is not a number in the expected range.`);
-      return null;
-    }
-    return value as number;
-  };
-
-  const date = (raw: unknown, label: string): string | null => {
-    if (isBlank(raw)) return null;
-    const value = typeof raw === 'string' ? raw.trim() : raw;
-    if (typeof value === 'string' && DATE.test(value)) {
-      const [year, month, day] = value.split('-').map(Number);
-      const parsed = new Date(Date.UTC(year, month - 1, day));
-      // Rejects dates that don't exist, like 30 February, which Date would otherwise roll into March.
-      if (parsed.getUTCFullYear() === year && parsed.getUTCMonth() === month - 1 && parsed.getUTCDate() === day) return value;
-    }
-    warnings.push(`Ignored ${label} (${String(value)}) because it is not a valid date.`);
-    return null;
-  };
+  const warnings = readWarnings(root);
+  const { text, number, date } = createReaders(warnings);
 
   const instrument = text(company.instrument);
   const tranches = (Array.isArray(ic.tranches) ? ic.tranches : [])
@@ -188,15 +121,7 @@ export function normaliseIcMemo(raw: unknown): Normalised {
       convertedToUsd: currency.convertedToUsd === true,
       fxNote: text(currency.fxNote, 500),
     },
-    sources: (Array.isArray(root.sources) ? root.sources : []).slice(0, 40).map((item) => {
-      const source = asRecord(item);
-      const page = source.page;
-      return {
-        field: text(source.field, 80) ?? 'unknown',
-        page: typeof page === 'number' && Number.isInteger(page) && page > 0 ? page : null,
-        quote: text(source.quote, 300) ?? '',
-      };
-    }),
+    sources: readSources(root),
     warnings,
   };
 }

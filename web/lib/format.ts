@@ -27,7 +27,22 @@ export const date = (isoDate: string) =>
     timeZone: 'UTC',
   });
 
-export const fileSize = (bytes: number) => {
+const usdPreciseFormatter = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 2, maximumFractionDigits: 4 });
+const countFormatter = new Intl.NumberFormat('en-US', { maximumFractionDigits: 4 });
+
+/** For per-share prices, where cents and fractions of a cent matter. */
+export const usdPrecise = (value: number | null | undefined) => (value == null ? '—' : usdPreciseFormatter.format(value));
+export const count = (value: number | null | undefined) => (value == null ? '—' : countFormatter.format(value));
+
+export const EXPENSE_CATEGORY_LABELS: Record<string, string> = {
+  LEGAL: 'Legal',
+  DUE_DILIGENCE: 'Due diligence',
+  STAMP_DUTY: 'Stamp duty & filing',
+  ADVISORY: 'Advisory',
+  OTHER: 'Other',
+};
+
+export const fileSize =(bytes: number) => {
   if (bytes < 1024) return `${bytes} B`;
   if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} KB`;
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;

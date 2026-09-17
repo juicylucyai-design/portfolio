@@ -1,7 +1,8 @@
 import { Body, Controller, Delete, HttpCode, Param, Post } from '@nestjs/common';
-import type { CreateFromIcMemoResponse, DeleteInvestmentResult, SessionUser } from '@nksq/contracts';
+import type { CreateFromIcMemoResponse, DeleteInvestmentResult, InvestmentStatus, SaveClosingResponse, SessionUser } from '@nksq/contracts';
 import { CurrentUser } from '../../common/public.decorator';
 import { asObject, parseId, requireNumber, requireString } from '../../common/validation';
+import { parseClosingInput } from '../closing';
 import { parseIcCaseInput } from '../ic-case';
 import { parseCreateInvestment } from '../portfolio';
 import { LifecycleService } from './lifecycle.service';
@@ -21,6 +22,22 @@ export class LifecycleController {
       },
       user,
     );
+  }
+
+  @Post('investments/:id/closings')
+  saveClosing(@Param('id') id: string, @Body() body: unknown, @CurrentUser() user: SessionUser): Promise<SaveClosingResponse> {
+    const input = asObject(body);
+    const documentId = input.documentId === null || input.documentId === undefined ? null : requireNumber(input, 'documentId', 'Closing document', { integer: true, min: 1 });
+    return this.lifecycle.saveClosing(parseId(id, 'Investment id'), { documentId, closing: parseClosingInput(input.closing) }, user);
+  }
+
+  @Delete('investments/:id/closings/:closingId')
+  deleteClosing(
+    @Param('id') id: string,
+    @Param('closingId') closingId: string,
+    @CurrentUser() user: SessionUser,
+  ): Promise<{ status: InvestmentStatus; documentsDeleted: number }> {
+    return this.lifecycle.deleteClosing(parseId(id, 'Investment id'), parseId(closingId, 'Closing id'), user);
   }
 
   @Delete('investments/:id')

@@ -3,9 +3,14 @@ import type {
   CreateFromIcMemoRequest,
   CreateFromIcMemoResponse,
   DeleteInvestmentResult,
+  DocumentInfo,
   IcCase,
+  InvestmentStatus,
+  SaveClosingRequest,
+  SaveClosingResponse,
   SessionUser,
 } from '@nksq/contracts';
+import { ClosingService } from '../closing';
 import { DocumentsService } from '../documents';
 import { IcCaseService } from '../ic-case';
 import { IntakeService } from '../intake';
@@ -14,8 +19,9 @@ import { PortfolioService } from '../portfolio';
 const CLEANUP_EVERY_MS = 6 * 60 * 60 * 1000;
 
 /**
- * Operations that span modules: creating an investment from an IC memo, and deleting an investment
- * with everything attached to it. Each module still only touches its own tables; this service decides the order.
+ * Operations that span modules: creating an investment from an IC memo, recording and deleting closings with their
+ * documents, and deleting an investment with everything attached to it. Each module still only touches its own
+ * tables; this service decides the order.
  */
 @Injectable()
 export class LifecycleService implements OnModuleInit, OnModuleDestroy {
@@ -25,6 +31,7 @@ export class LifecycleService implements OnModuleInit, OnModuleDestroy {
   constructor(
     private readonly portfolio: PortfolioService,
     private readonly icCases: IcCaseService,
+    private readonly closings: ClosingService,
     private readonly documents: DocumentsService,
     private readonly intake: IntakeService,
   ) {}
@@ -49,10 +56,45 @@ export class LifecycleService implements OnModuleInit, OnModuleDestroy {
     }
   }
 
+  /** Records a closing, attaches its document, and moves the investment to Partly drawn or Closed. */
+  async saveClosing(investmentId: number, request: SaveClosingRequest, user: SessionUser): Promise<SaveClosingResponse> {
+    if (request.documentId !== null) {
+      const upload = await this.documents.assertUnattached(request.documentId);
+      if (upload.category !== 'CLOSING') throw new BadRequestException('That document was not uploaded as a closing document.');
+    }
+
+    const closing = await this.closings.record(investmentId, request.closing, user);
+    let document: DocumentInfo | null = null;
+    try {
+      if (request.documentId !== null) {
+        document = await this.documents.attachToInvestment(request.documentId, investmentId, { type: 'CLOSING', id: closing.id });
+      }
+    } catch (error) {
+      await this.closings.delete(investmentId, closing.id).catch(() => undefined);
+      throw error;
+    }
+
+    const status = await this.refreshDealStage(investmentId);
+    this.logger.log(`${user.username} recorded closing ${closing.closingNumber} on investment ${investmentId}`);
+    return { closing, document, status };
+  }
+
+  /** Deletes one closing with its documents and what Claude read from them, then updates the deal stage. */
+  async deleteClosing(investmentId: number, closingId: number, user: SessionUser): Promise<{ status: InvestmentStatus; documentsDeleted: number }> {
+    const closing = await this.closings.get(investmentId, closingId);
+    const documentIds = await this.documents.idsForRecord('CLOSING', closingId);
+    await this.intake.deleteForDocuments(documentIds);
+    const documents = await this.documents.deleteByIds(documentIds);
+    await this.closings.delete(investmentId, closingId);
+    const status = await this.refreshDealStage(investmentId);
+    this.logger.log(`${user.username} deleted closing ${closing.closingNumber} on investment ${investmentId} (${documents.count} documents)`);
+    return { status, documentsDeleted: documents.count };
+  }
+
   /**
-   * Deletes an investment and everything held for it: IC versions and tranches, documents and their files,
-   * and Claude extractions of those documents. Runs from the leaves inward, so if a step fails the investment
-   * is still listed and deleting again finishes the job.
+   * Deletes an investment and everything held for it: closings and expenses, IC versions and tranches, documents
+   * and their files, and Claude extractions of those documents. Runs from the leaves inward, so if a step fails the
+   * investment is still listed and deleting again finishes the job.
    */
   async deleteInvestment(investmentId: number, confirmCompanyName: string, user: SessionUser): Promise<DeleteInvestmentResult> {
     const investment = await this.portfolio.get(investmentId);
@@ -63,17 +105,19 @@ export class LifecycleService implements OnModuleInit, OnModuleDestroy {
     const documentIds = await this.documents.idsForInvestment(investmentId);
     const extractionsDeleted = await this.intake.deleteForDocuments(documentIds);
     const documents = await this.documents.deleteByIds(documentIds);
+    const closingsDeleted = await this.closings.deleteForInvestment(investmentId);
     const icCasesDeleted = await this.icCases.deleteForInvestment(investmentId);
     await this.portfolio.delete(investmentId);
 
     this.logger.log(
-      `${user.username} deleted investment ${investmentId} (${investment.companyName}): ` +
+      `${user.username} deleted investment ${investmentId} (${investment.companyName}): ${closingsDeleted} closings, ` +
         `${icCasesDeleted} IC versions, ${documents.count} documents (${documents.bytes} bytes), ${extractionsDeleted} extractions`,
     );
     return {
       investmentId,
       companyName: investment.companyName,
       icCasesDeleted,
+      closingsDeleted,
       documentsDeleted: documents.count,
       bytesFreed: documents.bytes,
       extractionsDeleted,
@@ -94,6 +138,16 @@ export class LifecycleService implements OnModuleInit, OnModuleDestroy {
     await this.intake.deleteForDocuments(ids);
     const { count, bytes } = await this.documents.deleteByIds(ids);
     this.logger.log(`Removed ${count} abandoned uploads (${bytes} bytes).`);
+  }
+
+  /** No closings: IC approved (or pipeline). Some tranches still undrawn: partly drawn. Otherwise: closed. */
+  private async refreshDealStage(investmentId: number): Promise<InvestmentStatus> {
+    const [closings, icCase] = await Promise.all([this.closings.listForInvestment(investmentId), this.icCases.latest(investmentId)]);
+    let stage: 'PIPELINE' | 'IC_APPROVED' | 'PARTLY_DRAWN' | 'CLOSED';
+    if (closings.length === 0) stage = icCase ? 'IC_APPROVED' : 'PIPELINE';
+    else if (icCase && icCase.tranches.length > closings.length) stage = 'PARTLY_DRAWN';
+    else stage = 'CLOSED';
+    return this.portfolio.setDealStage(investmentId, stage);
   }
 
   onModuleInit(): void {

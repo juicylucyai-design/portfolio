@@ -93,6 +93,11 @@ export class DocumentsRepository {
     return rows.map((row) => row.id);
   }
 
+  async idsForRecord(recordType: string, recordId: number): Promise<number[]> {
+    const rows = await this.db.query<{ id: number }>('SELECT id FROM documents WHERE record_type = $1 AND record_id = $2', [recordType, recordId]);
+    return rows.map((row) => row.id);
+  }
+
   async unattachedOlderThan(hours: number): Promise<number[]> {
     const rows = await this.db.query<{ id: number }>(
       `SELECT id FROM documents WHERE investment_id IS NULL AND uploaded_at < now() - make_interval(hours => $1)`,

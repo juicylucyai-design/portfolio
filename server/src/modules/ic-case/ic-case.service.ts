@@ -26,6 +26,12 @@ export class IcCaseService {
     return this.repository.latestSummaries();
   }
 
+  /** The current IC version for one investment, or null if none has been recorded. */
+  async latest(investmentId: number): Promise<IcCase | null> {
+    const versions = await this.repository.listForInvestment(investmentId);
+    return versions[0] ?? null;
+  }
+
   /** Records an IC approval. The first one is version 1; each revised IC memo adds the next version. */
   async recordApproval(investmentId: number, input: IcCaseInput, user: SessionUser): Promise<IcCase> {
     await this.portfolio.get(investmentId);

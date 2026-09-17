@@ -1,9 +1,11 @@
 import { Injectable } from '@nestjs/common';
 import { Db } from '../../database/db';
 
+export type ExtractionKind = 'IC_MEMO' | 'CLOSING';
+
 export interface NewExtraction {
   documentId: number;
-  kind: 'IC_MEMO';
+  kind: ExtractionKind;
   status: 'SUCCEEDED' | 'FAILED';
   model: string;
   promptVersion: string;

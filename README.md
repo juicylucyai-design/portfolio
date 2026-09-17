@@ -10,10 +10,17 @@ Tracks every NKSquared investment from the IC-approved plan onward. All amounts 
 - New investment from an IC memo: upload the PDF, Claude reads it and fills in the company and IC case, you check and save.
   The PDF is kept in the document repository, linked to IC version 1.
 - Documents: every saved PDF is listed on its investment, to open or download.
-- Delete investment: removes the investment, its IC versions and tranches, its documents and file contents,
-  and everything Claude extracted from them. Requires typing the company name.
+- Closings: upload the closing document (allotment letter, SSA, closing memo, funds flow); Claude reads the shares
+  allotted, price, amount paid (converted to USD at the stated rate), post-money, ownership and expenses; you check and save.
+  One closing per IC tranche. **Once any closing exists, closing figures are the record of the transaction**: cost
+  (invested plus expenses), shares and ownership come from closings, and the IC approval only supplies exit assumptions
+  (exit year, exit valuation, dilution) for projected returns.
+- Current position on every investment and on the dashboard, from closings when closed and from the IC approval before that.
+  Status moves to Partly drawn or Closed automatically as tranches close.
+- Delete investment: removes the investment, its closings and expenses, IC versions and tranches, its documents and file
+  contents, and everything Claude extracted from them. Requires typing the company name. Single closings can be deleted too.
 
-**Next, per the architecture blueprint:** Closing, Capital Events, Performance + Statement Intake, Carry.
+**Next, per the architecture blueprint:** Capital Events, statements (Performance + Statement Intake), Carry.
 
 ## Architecture
 
@@ -34,9 +41,11 @@ server/
     users/                users + sessions, login/logout, auth guard
     portfolio/            companies + investments
     ic-case/              ic_cases + ic_tranches, projection
+    closing/              closings + closing_expenses
+    performance/          current position (pure position.ts); no tables yet, statements join later
     documents/            documents + document_files (PDF bytes)
-    intake/               extractions; claude.client.ts is the only code that calls the Claude API
-    lifecycle/            create-from-IC-memo and delete-investment, which span modules; owns no tables
+    intake/               extractions of IC memos and closing documents; claude.client.ts is the only code that calls Claude
+    lifecycle/            create-from-IC-memo, save/delete closing, delete investment: work spanning modules; owns no tables
   db/migrations/          one SQL file per module, applied in order on startup
   test/                   node:test unit tests: money math, IC projections, checks on Claude's answers
 ```
@@ -52,7 +61,9 @@ calls them in order:
 
 - **Create from memo:** check the IC case → create investment → record IC v1 → attach the memo. If a step fails, the
   investment and IC case are removed again and the uploaded memo is kept so the person can retry.
-- **Delete:** extractions → documents and files → IC versions → investment (and the company, if nothing else uses it).
+- **Save closing:** check the tranche → save closing and expenses → attach its document → set status (Partly drawn
+  while IC tranches remain undrawn, otherwise Closed). Deleting a closing reverses this.
+- **Delete:** extractions → documents and files → closings → IC versions → investment (and the company, if nothing else uses it).
   It runs from the outside in, so if a step fails the investment is still listed and deleting again finishes the job.
 - **Abandoned uploads** (uploaded but never saved with an investment) are removed after 24 hours.
 
