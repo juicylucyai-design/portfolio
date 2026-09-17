@@ -1,0 +1,28 @@
+{
+  "name": "nksquared-portfolio-manager",
+  "private": true,
+  "description": "NKSquared Portfolio Manager: IC cases, closings, performance and carry for every investment.",
+  "workspaces": [
+    "contracts",
+    "server",
+    "web"
+  ],
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "build": "npm run build -w web && npm run build -w server",
+    "start": "node server/dist/main.js",
+    "dev:server": "npm run dev -w server",
+    "dev:web": "npm run dev -w web",
+    "db:local": "pglite-server --db=./.local-db --port=5432",
+    "test": "npm test -w server",
+    "check:boundaries": "depcruise server/src web/app web/components web/lib --config .dependency-cruiser.cjs",
+    "typecheck": "npm run typecheck -w server && npm run typecheck -w web"
+  },
+  "devDependencies": {
+    "@electric-sql/pglite": "^0.5.8",
+    "@electric-sql/pglite-socket": "^0.2.11",
+    "dependency-cruiser": "^18.3.1"
+  }
+}

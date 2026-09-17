@@ -1,7 +1,7 @@
-import { HttpException, Inject, Injectable } from '@nestjs/common';
+import { HttpException, Injectable } from '@nestjs/common';
 import type { ClosingExtraction, IcMemoExtraction, IntakeStatus, SessionUser } from '@nksq/contracts';
 import { DocumentsService } from '../documents';
-import { PDF_READER, type PdfReader } from './pdf-reader';
+import { ClaudeClient } from './claude.client';
 import { CLOSING_INSTRUCTION, CLOSING_PROMPT_VERSION, CLOSING_SCHEMA, CLOSING_SYSTEM_PROMPT, normaliseClosing } from './closing.extraction';
 import { IC_MEMO_INSTRUCTION, IC_MEMO_PROMPT_VERSION, IC_MEMO_SCHEMA, IC_MEMO_SYSTEM_PROMPT, normaliseIcMemo } from './ic-memo.extraction';
 import { ExtractionKind, IntakeRepository } from './intake.repository';
@@ -36,13 +36,13 @@ const CLOSING: ExtractionSpec<ReturnType<typeof normaliseClosing>> = {
 @Injectable()
 export class IntakeService {
   constructor(
-    @Inject(PDF_READER) private readonly claude: PdfReader,
+    private readonly claude: ClaudeClient,
     private readonly repository: IntakeRepository,
     private readonly documents: DocumentsService,
   ) {}
 
   status(): IntakeStatus {
-    return { configured: this.claude.isConfigured(), model: this.claude.model, reader: this.claude.kind };
+    return { configured: this.claude.isConfigured(), model: this.claude.model };
   }
 
   extractIcMemo(documentId: number, user: SessionUser): Promise<IcMemoExtraction> {

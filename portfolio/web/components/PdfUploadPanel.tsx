@@ -49,7 +49,7 @@ export function PdfUploadPanel<T extends ExtractionResult>(props: {
   const fileInput = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
-    api<IntakeStatus>('/intake/status').then(setIntake).catch(() => setIntake({ configured: false, model: '', reader: 'api' }));
+    api<IntakeStatus>('/intake/status').then(setIntake).catch(() => setIntake({ configured: false, model: '' }));
   }, []);
 
   const busy = phase === 'uploading' || phase === 'reading';
@@ -120,16 +120,7 @@ export function PdfUploadPanel<T extends ExtractionResult>(props: {
       </div>
       <div className="panel-body">
         {intake && !intake.configured && (
-          <div className="alert alert-info">
-            {intake.reader === 'claude-code'
-              ? "Claude Code from the Claude desktop app wasn't found on this computer, so documents can't be read automatically. You can still upload the PDF and fill in the form yourself."
-              : "Reading documents automatically isn't switched on (the server needs ANTHROPIC_API_KEY). You can still upload the PDF and fill in the form yourself."}
-          </div>
-        )}
-        {intake?.configured && intake.reader === 'claude-code' && (
-          <p className="subtle" style={{ fontSize: 13, margin: 0 }}>
-            Local testing: documents are read by Claude Code on this computer using your Claude sign-in, not the API key.
-          </p>
+          <div className="alert alert-info">Reading documents automatically isn't switched on (the server needs ANTHROPIC_API_KEY). You can still upload the PDF and fill in the form yourself.</div>
         )}
         {error && <div className="alert alert-error">{error}</div>}
 

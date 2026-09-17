@@ -136,31 +136,6 @@ npm start                  # http://localhost:3000
 
 For live-reloading UI work, run `npm run dev:server` and `npm run dev:web` (http://localhost:3001, API calls are forwarded to :3000).
 
-### Local staging
-
-A persistent local copy of the app, separate from production, on the `staging` branch:
-
-```bash
-npm run build
-npm run staging            # http://localhost:3100, data kept in .staging-db/
-```
-
-Settings (admin user, optional `ANTHROPIC_API_KEY`) go in `.env.staging.local`, which git ignores.
-Delete `.staging-db/` to start over with an empty database.
-
-**Reading PDFs without an API key (local only).** With `CLAUDE_READER=claude-code`, IC memos and closing documents are
-read by the Claude Code CLI that comes with the Claude desktop app, signed in with your Claude account. The app copies the
-PDF to a temporary folder, lets Claude Code use only its Read tool there, and requires the same JSON schema as the API
-reader, so the rest of the app behaves identically. Sign Claude Code in once:
-
-```powershell
-& "$env:APPDATA\Claude\claude-code\<version>\claude.exe" auth login
-```
-
-The server refuses to start with `CLAUDE_READER=claude-code` when `NODE_ENV=production` or on Railway; production always
-uses `ANTHROPIC_API_KEY`. Set `CLAUDE_CODE_PATH` if Claude Code lives somewhere else, and `CLAUDE_CODE_MODEL` to change
-the model (default `opus`).
-
 ## Checks
 
 ```bash

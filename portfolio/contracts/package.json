@@ -1,0 +1,7 @@
+{
+  "name": "@nksq/contracts",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Request and response types shared by the web app and the server.",
+  "types": "index.d.ts"
+}

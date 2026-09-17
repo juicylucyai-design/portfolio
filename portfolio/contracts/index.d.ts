@@ -223,8 +223,6 @@ export interface DocumentInfo {
 export interface IntakeStatus {
   configured: boolean;
   model: string;
-  /** 'api' uses ANTHROPIC_API_KEY; 'claude-code' uses the Claude desktop app's sign-in (local testing only). */
-  reader: 'api' | 'claude-code';
 }
 
 export interface ExtractedTranche {

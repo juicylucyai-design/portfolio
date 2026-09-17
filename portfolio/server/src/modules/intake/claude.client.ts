@@ -1,11 +1,16 @@
 import Anthropic from '@anthropic-ai/sdk';
 import { HttpException, HttpStatus, Injectable } from '@nestjs/common';
-import type { PdfReader, PdfReadResult } from './pdf-reader';
 
-/** The only code that talks to the Claude API. The production reader. */
+export interface PdfReadResult {
+  data: unknown;
+  model: string;
+  inputTokens: number;
+  outputTokens: number;
+}
+
+/** The only code that talks to the Claude API. */
 @Injectable()
-export class ClaudeClient implements PdfReader {
-  readonly kind = 'api' as const;
+export class ClaudeClient {
   readonly model = process.env.CLAUDE_MODEL?.trim() || 'claude-opus-5';
   private client: Anthropic | null = null;
 
