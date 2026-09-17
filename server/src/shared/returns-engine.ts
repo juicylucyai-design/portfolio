@@ -15,6 +15,11 @@ function dayNumber(date: string): number {
   return Date.UTC(year, month - 1, day) / DAY_MS;
 }
 
+/** Actual days / 365 between two YYYY-MM-DD dates, same day-count convention as xirr(). */
+export function yearsBetween(start: string, end: string): number {
+  return (dayNumber(end) - dayNumber(start)) / 365;
+}
+
 /** Present value of the flows at `rate`, discounted to the first flow's date. */
 export function npv(rate: number, flows: CashFlow[]): number {
   const start = Math.min(...flows.map((flow) => dayNumber(flow.date)));

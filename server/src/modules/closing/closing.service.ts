@@ -25,6 +25,20 @@ export class ClosingService {
   /** Checks a closing against what already exists, without saving it. */
   async validate(investmentId: number, input: ClosingInput): Promise<void> {
     await this.portfolio.get(investmentId);
+    const existing = await this.repository.list(investmentId);
+
+    // Ownership after a closing is cumulative — every share NKSquared holds, including from earlier closings,
+    // divided by the fully diluted total — so it should never fall below what an earlier closing already recorded.
+    // The one case this doesn't hold (a down-round diluting NKSquared's existing stake between closings) is rare
+    // enough that recording it under "Not linked to a tranche" with a note is a reasonable workaround.
+    const priorMax = existing.reduce((max, c) => Math.max(max, c.ownershipPctAfter), 0);
+    if (existing.length > 0 && input.ownershipPctAfter < priorMax) {
+      throw new BadRequestException(
+        `Ownership after this closing (${input.ownershipPctAfter}%) is lower than an earlier closing's ${priorMax}%. ` +
+          'Ownership after should be cumulative: all shares NKSquared holds so far, divided by the fully diluted total — not just the shares from this closing.',
+      );
+    }
+
     if (input.icTrancheNumber === null) return;
 
     const icCase = await this.icCases.latest(investmentId);
@@ -32,7 +46,6 @@ export class ClosingService {
     if (!icCase.tranches.some((t) => t.trancheNumber === input.icTrancheNumber)) {
       throw new BadRequestException(`IC version ${icCase.version} has no tranche ${input.icTrancheNumber}.`);
     }
-    const existing = await this.repository.list(investmentId);
     const drawnBy = existing.find((c) => c.icTrancheNumber === input.icTrancheNumber);
     if (drawnBy) throw new ConflictException(`Tranche ${input.icTrancheNumber} was already drawn by closing ${drawnBy.closingNumber}.`);
   }

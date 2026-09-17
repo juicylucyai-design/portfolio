@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useEffect, useMemo, useState } from 'react';
 import { AppShell } from '@/components/AppShell';
+import { Stat } from '@/components/Stat';
 import { api } from '@/lib/api';
 import { fileSize, multiple, percent, rate, STATUS_LABELS, usd, usdCompact } from '@/lib/format';
 
@@ -12,6 +13,7 @@ export default function DashboardPage() {
   const router = useRouter();
   const [investments, setInvestments] = useState<Investment[] | null>(null);
   const [positions, setPositions] = useState<Map<number, Position>>(new Map());
+  const [portfolioSummary, setPortfolioSummary] = useState<{ moic: number | null; irr: number | null }>({ moic: null, irr: null });
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
 
@@ -28,10 +30,15 @@ export default function DashboardPage() {
   }, []);
 
   useEffect(() => {
-    Promise.all([api<Investment[]>('/investments'), api<Position[]>('/positions')])
-      .then(([list, positionList]) => {
+    Promise.all([
+      api<Investment[]>('/investments'),
+      api<Position[]>('/positions'),
+      api<{ moic: number | null; irr: number | null }>('/positions/portfolio-summary'),
+    ])
+      .then(([list, positionList, summary]) => {
         setInvestments(list);
         setPositions(new Map(positionList.map((p) => [p.investmentId, p])));
+        setPortfolioSummary(summary);
       })
       .catch((err: Error) => setError(err.message));
   }, []);
@@ -39,14 +46,11 @@ export default function DashboardPage() {
   const totals = useMemo(() => {
     const all = [...positions.values()];
     const closed = all.filter((p) => p.basis === 'CLOSING');
-    const withProjection = all.filter((p) => p.projectedProceedsUsd !== null && p.costUsd);
-    const cost = withProjection.reduce((sum, p) => sum + (p.costUsd ?? 0), 0);
-    const proceeds = withProjection.reduce((sum, p) => sum + (p.projectedProceedsUsd ?? 0), 0);
     return {
       closedCount: closed.length,
-      investedToDate: closed.reduce((sum, p) => sum + (p.costUsd ?? 0), 0),
-      undrawn: all.reduce((sum, p) => sum + (p.undrawnCommitmentUsd ?? 0), 0),
-      moic: cost > 0 ? proceeds / cost : null,
+      investedToDate: closed.reduce((sum, p) => sum + (p.investedUsd ?? 0), 0),
+      // Capital events (sales, dividends) aren't tracked yet, so nothing is realized until that module exists.
+      realized: 0,
     };
   }, [positions]);
 
@@ -70,26 +74,21 @@ export default function DashboardPage() {
       {error && <div className="alert alert-error">{error}</div>}
 
       <section className="stats" aria-label="Portfolio summary">
-        <div className="stat">
-          <span className="label">Investments</span>
-          <span className="value">{investments ? investments.length : '—'}</span>
-          <span className="note">{totals.closedCount} closed</span>
-        </div>
-        <div className="stat">
-          <span className="label">Invested to date</span>
-          <span className="value">{usdCompact(totals.investedToDate)}</span>
-          <span className="note">from closings, expenses included</span>
-        </div>
-        <div className="stat">
-          <span className="label">Committed, not yet drawn</span>
-          <span className="value">{usdCompact(totals.undrawn)}</span>
-          <span className="note">latest IC approvals less closings</span>
-        </div>
-        <div className="stat">
-          <span className="label">Projected portfolio MOIC</span>
-          <span className="value accent">{multiple(totals.moic)}</span>
-          <span className="note">actual cost where closed, IC otherwise</span>
-        </div>
+        <Stat label="Investments" value={investments ? investments.length : '—'} note={`${totals.closedCount} closed`} />
+        <Stat label="Invested to date" value={usdCompact(totals.investedToDate)} note="From closings, excluding expenses." />
+        <Stat label="Realized" value={usdCompact(totals.realized)} note="From capital events (sales, dividends) — none recorded yet." />
+        <Stat
+          label="Portfolio MOIC"
+          value={multiple(portfolioSummary.moic)}
+          note="Actual cost vs. value at each investment's latest known valuation. Investments with no closing yet aren't counted."
+          accent
+        />
+        <Stat
+          label="Portfolio IRR"
+          value={rate(portfolioSummary.irr)}
+          note="XIRR of actual closing cash flows to date, marked at each investment's latest known valuation as of today."
+          accent
+        />
       </section>
 
       <section className="panel">
@@ -112,8 +111,10 @@ export default function DashboardPage() {
                 <tr>
                   <th>Company</th>
                   <th>Status</th>
-                  <th>Figures from</th>
-                  <th className="num">Cost</th>
+                  <th className="num">Investment</th>
+                  <th className="num">Expenses</th>
+                  <th className="num">Invested valuation</th>
+                  <th className="num">Current valuation</th>
                   <th className="num">Ownership</th>
                   <th className="num">Exit year</th>
                   <th className="num">Proj. MOIC</th>
@@ -124,16 +125,6 @@ export default function DashboardPage() {
                 {investments?.map((investment) => {
                   const position = positions.get(investment.id);
                   const href = `/investment?id=${investment.id}`;
-                  const basis =
-                    position?.basis === 'CLOSING' ? (
-                      <span className="tag current">
-                        {position.closingCount} closing{position.closingCount === 1 ? '' : 's'}
-                      </span>
-                    ) : position?.basis === 'IC' ? (
-                      <span className="tag">IC v{position.icVersion}</span>
-                    ) : (
-                      <span className="subtle">—</span>
-                    );
                   return (
                     <tr key={investment.id} className="clickable" onClick={() => router.push(href)}>
                       <td>
@@ -147,8 +138,10 @@ export default function DashboardPage() {
                       <td>
                         <span className={`pill ${investment.status}`}>{STATUS_LABELS[investment.status]}</span>
                       </td>
-                      <td>{basis}</td>
-                      <td className="num">{usd(position?.costUsd)}</td>
+                      <td className="num">{usd(position?.investedUsd ?? position?.costUsd)}</td>
+                      <td className="num">{usd(position?.expensesUsd)}</td>
+                      <td className="num">{usd(position?.entryValuationUsd)}</td>
+                      <td className="num">{usd(position?.currentValuationUsd)}</td>
                       <td className="num">{percent(position?.ownershipPct)}</td>
                       <td className="num">{position?.exitYear ?? '—'}</td>
                       <td className="num">{multiple(position?.projectedMoic)}</td>

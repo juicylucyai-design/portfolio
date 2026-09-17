@@ -77,13 +77,25 @@ export class IcCaseRepository {
     }));
   }
 
-  /** The current (latest) version of every investment that has one. */
+  /** The current (latest) version of every investment that has one, each with its tranches. */
   async latestSummaries(): Promise<IcCaseSummary[]> {
-    const rows = await this.db.query<IcCaseRow & { tranche_count: number }>(
-      `SELECT DISTINCT ON (c.investment_id) c.*,
-              (SELECT count(*)::int FROM ic_tranches t WHERE t.ic_case_id = c.id) AS tranche_count
-       FROM ic_cases c ORDER BY c.investment_id, c.version DESC`,
+    const rows = await this.db.query<IcCaseRow>(
+      `SELECT DISTINCT ON (c.investment_id) c.* FROM ic_cases c ORDER BY c.investment_id, c.version DESC`,
     );
+    if (rows.length === 0) return [];
+
+    const tranches = await this.db.query<TrancheRow>(
+      `SELECT ic_case_id, tranche_number, amount_usd, expected_date, milestone
+       FROM ic_tranches WHERE ic_case_id = ANY($1::bigint[]) ORDER BY tranche_number`,
+      [rows.map((row) => row.id)],
+    );
+    const byCase = new Map<number, IcTranche[]>();
+    for (const row of tranches) {
+      const list = byCase.get(row.ic_case_id) ?? [];
+      list.push({ trancheNumber: row.tranche_number, amountUsd: row.amount_usd, expectedDate: row.expected_date, milestone: row.milestone });
+      byCase.set(row.ic_case_id, list);
+    }
+
     return rows.map((row) => ({
       investmentId: row.investment_id,
       version: row.version,
@@ -93,9 +105,10 @@ export class IcCaseRepository {
       projectedIrr: row.projected_irr,
       exitYear: row.exit_year,
       exitValuationUsd: row.exit_valuation_usd,
+      entryPostMoneyUsd: row.entry_post_money_usd,
       entryOwnershipPct: row.entry_ownership_pct,
       dilutionToExitPct: row.dilution_to_exit_pct,
-      trancheCount: row.tranche_count,
+      tranches: byCase.get(row.id) ?? [],
     }));
   }
 

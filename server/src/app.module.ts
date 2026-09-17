@@ -1,5 +1,7 @@
 import { Module } from '@nestjs/common';
 import { DatabaseModule } from './database/database.module';
+import { CapitalEventModule } from './modules/capital-event';
+import { CarryModule } from './modules/carry';
 import { ClosingModule } from './modules/closing';
 import { DocumentsModule } from './modules/documents';
 import { IcCaseModule } from './modules/ic-case';
@@ -9,7 +11,7 @@ import { PerformanceModule } from './modules/performance';
 import { PortfolioModule } from './modules/portfolio';
 import { UsersModule } from './modules/users';
 
-// One line per module from the blueprint. Capital Events, statements and Carry are added here as they're built.
+// One line per module from the blueprint. Statements are added here as they're built.
 @Module({
   imports: [
     DatabaseModule,
@@ -17,7 +19,9 @@ import { UsersModule } from './modules/users';
     PortfolioModule,
     IcCaseModule,
     ClosingModule,
+    CapitalEventModule,
     PerformanceModule,
+    CarryModule,
     DocumentsModule,
     IntakeModule,
     LifecycleModule,

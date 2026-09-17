@@ -46,17 +46,18 @@ export async function api<T>(path: string, options: { method?: 'GET' | 'POST' | 
   return handle<T>(response, path);
 }
 
-/** Uploads a PDF as the raw request body. It's stored unattached until saved with an investment. */
-export async function uploadPdf(file: File, category: DocumentCategory): Promise<DocumentInfo> {
-  if (file.size > MAX_PDF_BYTES) throw new ApiError('PDFs must be 20 MB or smaller.', 413);
+/** Uploads a PDF or an email (.eml) as the raw request body. It's stored unattached until saved with an investment. */
+export async function uploadDocument(file: File, category: DocumentCategory): Promise<DocumentInfo> {
+  if (file.size > MAX_PDF_BYTES) throw new ApiError('Files must be 20 MB or smaller.', 413);
   const isPdf = file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf');
-  if (!isPdf) throw new ApiError('Choose a PDF file.', 400);
+  const isEmail = file.type === 'message/rfc822' || file.name.toLowerCase().endsWith('.eml');
+  if (!isPdf && !isEmail) throw new ApiError('Choose a PDF or an email (.eml) file.', 400);
 
   const path = `/documents?category=${category}&fileName=${encodeURIComponent(file.name)}`;
   const response = await fetch(`/api${path}`, {
     method: 'POST',
     credentials: 'same-origin',
-    headers: { 'Content-Type': 'application/pdf' },
+    headers: { 'Content-Type': isEmail ? 'message/rfc822' : 'application/pdf' },
     body: file,
   });
   return handle<DocumentInfo>(response, path);

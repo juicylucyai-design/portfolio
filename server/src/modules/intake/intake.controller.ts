@@ -1,5 +1,5 @@
 import { Body, Controller, Get, HttpCode, Post } from '@nestjs/common';
-import type { ClosingExtraction, IcMemoExtraction, IntakeStatus, SessionUser } from '@nksq/contracts';
+import type { CapitalEventExtraction, ClosingExtraction, IcMemoExtraction, IntakeStatus, SessionUser } from '@nksq/contracts';
 import { CurrentUser } from '../../common/public.decorator';
 import { asObject, requireNumber } from '../../common/validation';
 import { IntakeService } from './intake.service';
@@ -25,5 +25,11 @@ export class IntakeController {
   @HttpCode(200)
   extractClosing(@Body() body: unknown, @CurrentUser() user: SessionUser): Promise<ClosingExtraction> {
     return this.intake.extractClosing(documentIdFrom(body), user);
+  }
+
+  @Post('capital-event')
+  @HttpCode(200)
+  extractCapitalEvent(@Body() body: unknown, @CurrentUser() user: SessionUser): Promise<CapitalEventExtraction> {
+    return this.intake.extractCapitalEvent(documentIdFrom(body), user);
   }
 }

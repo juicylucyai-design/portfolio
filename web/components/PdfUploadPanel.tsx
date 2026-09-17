@@ -2,7 +2,7 @@
 
 import type { DocumentCategory, DocumentInfo, IntakeStatus } from '@nksq/contracts';
 import { useEffect, useRef, useState, type DragEvent, type ReactNode } from 'react';
-import { api, documentUrl, uploadPdf } from '@/lib/api';
+import { api, documentUrl, uploadDocument } from '@/lib/api';
 import { fileSize } from '@/lib/format';
 
 export interface ExtractionResult {
@@ -32,6 +32,8 @@ export function PdfUploadPanel<T extends ExtractionResult>(props: {
   title: string;
   intro: string;
   dropLabel: string;
+  /** File types this drop zone accepts. Defaults to PDF only. */
+  accept?: 'pdf' | 'pdf-or-email';
   readingLabel: string;
   countFilled: (result: T) => number;
   onDocument: (document: DocumentInfo | null) => void;
@@ -39,6 +41,7 @@ export function PdfUploadPanel<T extends ExtractionResult>(props: {
   onBusyChange?: (busy: boolean) => void;
   children?: (result: T) => ReactNode;
 }) {
+  const accept = props.accept ?? 'pdf';
   const { onBusyChange } = props;
   const [intake, setIntake] = useState<IntakeStatus | null>(null);
   const [document, setDocument] = useState<DocumentInfo | null>(null);
@@ -82,7 +85,7 @@ export function PdfUploadPanel<T extends ExtractionResult>(props: {
     setResult(null);
     setPhase('uploading');
     try {
-      const uploaded = await uploadPdf(file, props.category);
+      const uploaded = await uploadDocument(file, props.category);
       setDoc(uploaded);
       if (intake?.configured) await read(uploaded);
       else setPhase('not-read');
@@ -143,13 +146,19 @@ export function PdfUploadPanel<T extends ExtractionResult>(props: {
             onDragLeave={() => setDragging(false)}
             onDrop={onDrop}
           >
-            <input ref={fileInput} id={`upload-${props.category}`} type="file" accept="application/pdf,.pdf" onChange={(e) => void choose(e.target.files?.[0])} />
+            <input
+              ref={fileInput}
+              id={`upload-${props.category}`}
+              type="file"
+              accept={accept === 'pdf-or-email' ? 'application/pdf,.pdf,message/rfc822,.eml' : 'application/pdf,.pdf'}
+              onChange={(e) => void choose(e.target.files?.[0])}
+            />
             <strong>{props.dropLabel}</strong>
-            <span className="subtle">PDF, up to 20 MB</span>
+            <span className="subtle">{accept === 'pdf-or-email' ? 'PDF or email (.eml)' : 'PDF'}, up to 20 MB</span>
           </label>
         ) : (
           <div className="file-card">
-            <span className="file-icon" aria-hidden="true">PDF</span>
+            <span className="file-icon" aria-hidden="true">{document?.fileName.toLowerCase().endsWith('.eml') ? 'EML' : 'PDF'}</span>
             <div style={{ minWidth: 0 }}>
               <div className="file-name">{document?.fileName ?? 'Uploading…'}</div>
               <div className="subtle" style={{ fontSize: 13 }}>

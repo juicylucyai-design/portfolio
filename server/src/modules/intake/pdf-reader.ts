@@ -1,8 +1,10 @@
-// How the Intake module gets a PDF read by Claude. Two interchangeable readers:
+// How the Intake module gets a document read by Claude. Two interchangeable readers:
 // - 'api' (default, production): the Claude API with ANTHROPIC_API_KEY. See claude.client.ts.
 // - 'claude-code' (local testing only): the Claude Code CLI bundled with the Claude desktop app, signed in with
 //   your Claude account, so no API key is needed. See claude-code.reader.ts.
 // Choose with CLAUDE_READER. The rest of the app never knows which one is in use.
+
+export type DocumentContentType = 'application/pdf' | 'text/plain';
 
 export interface PdfReadResult {
   data: unknown;
@@ -15,7 +17,14 @@ export interface PdfReader {
   readonly kind: 'api' | 'claude-code';
   readonly model: string;
   isConfigured(): boolean;
-  readPdfAsJson(pdf: Buffer, system: string, instruction: string, schema: Record<string, unknown>): Promise<PdfReadResult>;
+  /** `content` is the raw PDF bytes for 'application/pdf', or the plain text itself (UTF-8) for 'text/plain'. */
+  readDocumentAsJson(
+    content: Buffer,
+    contentType: DocumentContentType,
+    system: string,
+    instruction: string,
+    schema: Record<string, unknown>,
+  ): Promise<PdfReadResult>;
 }
 
 export const PDF_READER = Symbol('PDF_READER');

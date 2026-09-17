@@ -3,19 +3,37 @@
 import type { SessionUser } from '@nksq/contracts';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { useEffect, useState, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { api } from '@/lib/api';
 
-const COMING_NEXT = ['Closings', 'Capital events', 'Performance', 'Carry', 'Documents'];
+const COMING_NEXT = ['Closings', 'Capital events', 'Performance', 'Documents'];
 
 export function AppShell({ children }: { children: ReactNode }) {
   const pathname = usePathname();
   const [user, setUser] = useState<SessionUser | null>(null);
   const [signingOut, setSigningOut] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
+  const menuRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     api<SessionUser>('/auth/me').then(setUser).catch(() => undefined);
   }, []);
+
+  useEffect(() => {
+    if (!menuOpen) return;
+    const onClickOutside = (e: MouseEvent) => {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) setMenuOpen(false);
+    };
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setMenuOpen(false);
+    };
+    document.addEventListener('mousedown', onClickOutside);
+    document.addEventListener('keydown', onKeyDown);
+    return () => {
+      document.removeEventListener('mousedown', onClickOutside);
+      document.removeEventListener('keydown', onKeyDown);
+    };
+  }, [menuOpen]);
 
   async function signOut() {
     setSigningOut(true);
@@ -39,6 +57,9 @@ export function AppShell({ children }: { children: ReactNode }) {
             <Link href="/" className={portfolioActive ? 'active' : undefined}>
               Portfolio
             </Link>
+            <Link href="/carry" className={pathname.startsWith('/carry') ? 'active' : undefined}>
+              Carry
+            </Link>
             {COMING_NEXT.map((label) => (
               <span key={label} className="soon" title="Coming in a later release">
                 {label}
@@ -46,11 +67,29 @@ export function AppShell({ children }: { children: ReactNode }) {
               </span>
             ))}
           </nav>
-          <div className="user">
-            {user && <span className="who">{user.displayName}</span>}
-            <button type="button" className="btn btn-small" onClick={signOut} disabled={signingOut}>
-              {signingOut ? 'Signing out…' : 'Sign out'}
+          <div className="user-menu" ref={menuRef}>
+            <button type="button" className="user-trigger" onClick={() => setMenuOpen((open) => !open)} aria-haspopup="menu" aria-expanded={menuOpen}>
+              {user && <span className="who">{user.displayName}</span>}
+              <svg width="10" height="6" viewBox="0 0 10 6" aria-hidden="true">
+                <path d="M1 1l4 4 4-4" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
             </button>
+            {menuOpen && (
+              <div className="user-dropdown" role="menu">
+                <button
+                  type="button"
+                  role="menuitem"
+                  className="user-dropdown-item"
+                  onClick={() => {
+                    setMenuOpen(false);
+                    void signOut();
+                  }}
+                  disabled={signingOut}
+                >
+                  {signingOut ? 'Signing out…' : 'Sign out'}
+                </button>
+              </div>
+            )}
           </div>
         </div>
       </header>

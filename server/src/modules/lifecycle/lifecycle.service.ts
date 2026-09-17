@@ -1,15 +1,20 @@
 import { BadRequestException, Injectable, Logger, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
 import type {
+  Closing,
   CreateFromIcMemoRequest,
   CreateFromIcMemoResponse,
   DeleteInvestmentResult,
   DocumentInfo,
   IcCase,
   InvestmentStatus,
-  SaveClosingRequest,
-  SaveClosingResponse,
+  SaveCapitalEventRequest,
+  SaveCapitalEventResponse,
+  SaveClosingsRequest,
+  SaveClosingsResponse,
   SessionUser,
 } from '@nksq/contracts';
+import { CapitalEventService } from '../capital-event';
+import { CarryService } from '../carry';
 import { ClosingService } from '../closing';
 import { DocumentsService } from '../documents';
 import { IcCaseService } from '../ic-case';
@@ -19,9 +24,9 @@ import { PortfolioService } from '../portfolio';
 const CLEANUP_EVERY_MS = 6 * 60 * 60 * 1000;
 
 /**
- * Operations that span modules: creating an investment from an IC memo, recording and deleting closings with their
- * documents, and deleting an investment with everything attached to it. Each module still only touches its own
- * tables; this service decides the order.
+ * Operations that span modules: creating an investment from an IC memo, recording and deleting closings and
+ * capital events with their documents, and deleting an investment with everything attached to it. Each module
+ * still only touches its own tables; this service decides the order.
  */
 @Injectable()
 export class LifecycleService implements OnModuleInit, OnModuleDestroy {
@@ -32,6 +37,8 @@ export class LifecycleService implements OnModuleInit, OnModuleDestroy {
     private readonly portfolio: PortfolioService,
     private readonly icCases: IcCaseService,
     private readonly closings: ClosingService,
+    private readonly capitalEvents: CapitalEventService,
+    private readonly carry: CarryService,
     private readonly documents: DocumentsService,
     private readonly intake: IntakeService,
   ) {}
@@ -56,27 +63,40 @@ export class LifecycleService implements OnModuleInit, OnModuleDestroy {
     }
   }
 
-  /** Records a closing, attaches its document, and moves the investment to Partly drawn or Closed. */
-  async saveClosing(investmentId: number, request: SaveClosingRequest, user: SessionUser): Promise<SaveClosingResponse> {
+  /**
+   * Records one or more closings from a single document (a closing memo can draw more than one IC tranche
+   * at once), attaches a copy of the document to each, and moves the investment to Partly drawn or Closed.
+   */
+  async saveClosings(investmentId: number, request: SaveClosingsRequest, user: SessionUser): Promise<SaveClosingsResponse> {
+    if (request.closings.length === 0) throw new BadRequestException('Record at least one closing.');
     if (request.documentId !== null) {
       const upload = await this.documents.assertUnattached(request.documentId);
       if (upload.category !== 'CLOSING') throw new BadRequestException('That document was not uploaded as a closing document.');
     }
 
-    const closing = await this.closings.record(investmentId, request.closing, user);
-    let document: DocumentInfo | null = null;
+    const closings: Closing[] = [];
+    const documents: (DocumentInfo | null)[] = [];
     try {
-      if (request.documentId !== null) {
-        document = await this.documents.attachToInvestment(request.documentId, investmentId, { type: 'CLOSING', id: closing.id });
+      for (const input of request.closings) {
+        const closing = await this.closings.record(investmentId, input, user);
+        closings.push(closing);
+        if (request.documentId === null) {
+          documents.push(null);
+          continue;
+        }
+        // The first closing gets the uploaded document itself; any further ones get their own copy of it,
+        // since one saved document can only be evidence for one record.
+        const docId = closings.length === 1 ? request.documentId : (await this.documents.duplicate(request.documentId, user.username)).id;
+        documents.push(await this.documents.attachToInvestment(docId, investmentId, { type: 'CLOSING', id: closing.id }));
       }
     } catch (error) {
-      await this.closings.delete(investmentId, closing.id).catch(() => undefined);
+      for (const closing of closings) await this.closings.delete(investmentId, closing.id).catch(() => undefined);
       throw error;
     }
 
     const status = await this.refreshDealStage(investmentId);
-    this.logger.log(`${user.username} recorded closing ${closing.closingNumber} on investment ${investmentId}`);
-    return { closing, document, status };
+    this.logger.log(`${user.username} recorded ${closings.length} closing(s) on investment ${investmentId}`);
+    return { closings, documents, status };
   }
 
   /** Deletes one closing with its documents and what Claude read from them, then updates the deal stage. */
@@ -91,10 +111,43 @@ export class LifecycleService implements OnModuleInit, OnModuleDestroy {
     return { status, documentsDeleted: documents.count };
   }
 
+  /** Records a capital event, attaches its evidence document (an email or PDF notice), if any. */
+  async saveCapitalEvent(investmentId: number, request: SaveCapitalEventRequest, user: SessionUser): Promise<SaveCapitalEventResponse> {
+    if (request.documentId !== null) {
+      const upload = await this.documents.assertUnattached(request.documentId);
+      if (upload.category !== 'CAPITAL_EVENT') throw new BadRequestException('That document was not uploaded as capital-event evidence.');
+    }
+
+    const capitalEvent = await this.capitalEvents.record(investmentId, request.capitalEvent, user);
+    let document: DocumentInfo | null = null;
+    try {
+      if (request.documentId !== null) {
+        document = await this.documents.attachToInvestment(request.documentId, investmentId, { type: 'CAPITAL_EVENT', id: capitalEvent.id });
+      }
+    } catch (error) {
+      await this.capitalEvents.delete(investmentId, capitalEvent.id).catch(() => undefined);
+      throw error;
+    }
+
+    this.logger.log(`${user.username} recorded a ${capitalEvent.eventType} capital event on investment ${investmentId}`);
+    return { capitalEvent, document };
+  }
+
+  /** Deletes one capital event with its evidence document and what Claude read from it. */
+  async deleteCapitalEvent(investmentId: number, eventId: number, user: SessionUser): Promise<{ documentsDeleted: number }> {
+    const event = await this.capitalEvents.get(investmentId, eventId);
+    const documentIds = await this.documents.idsForRecord('CAPITAL_EVENT', eventId);
+    await this.intake.deleteForDocuments(documentIds);
+    const documents = await this.documents.deleteByIds(documentIds);
+    await this.capitalEvents.delete(investmentId, eventId);
+    this.logger.log(`${user.username} deleted a ${event.eventType} capital event on investment ${investmentId} (${documents.count} documents)`);
+    return { documentsDeleted: documents.count };
+  }
+
   /**
-   * Deletes an investment and everything held for it: closings and expenses, IC versions and tranches, documents
-   * and their files, and Claude extractions of those documents. Runs from the leaves inward, so if a step fails the
-   * investment is still listed and deleting again finishes the job.
+   * Deletes an investment and everything held for it: closings and expenses, capital events, IC versions and
+   * tranches, documents and their files, and Claude extractions of those documents. Runs from the leaves inward,
+   * so if a step fails the investment is still listed and deleting again finishes the job.
    */
   async deleteInvestment(investmentId: number, confirmCompanyName: string, user: SessionUser): Promise<DeleteInvestmentResult> {
     const investment = await this.portfolio.get(investmentId);
@@ -106,6 +159,8 @@ export class LifecycleService implements OnModuleInit, OnModuleDestroy {
     const extractionsDeleted = await this.intake.deleteForDocuments(documentIds);
     const documents = await this.documents.deleteByIds(documentIds);
     const closingsDeleted = await this.closings.deleteForInvestment(investmentId);
+    await this.capitalEvents.deleteForInvestment(investmentId);
+    await this.carry.deleteForInvestment(investmentId);
     const icCasesDeleted = await this.icCases.deleteForInvestment(investmentId);
     await this.portfolio.delete(investmentId);
 
@@ -140,13 +195,22 @@ export class LifecycleService implements OnModuleInit, OnModuleDestroy {
     this.logger.log(`Removed ${count} abandoned uploads (${bytes} bytes).`);
   }
 
-  /** No closings: IC approved (or pipeline). Some tranches still undrawn: partly drawn. Otherwise: closed. */
+  /**
+   * No closings: IC approved (or pipeline). Some IC tranches have no closing drawing them: partly drawn.
+   * Otherwise: closed. A tranche closed for more or less than its approved amount still counts as drawn —
+   * only whether a closing exists for it decides the stage, not the dollar amount.
+   */
   private async refreshDealStage(investmentId: number): Promise<InvestmentStatus> {
     const [closings, icCase] = await Promise.all([this.closings.listForInvestment(investmentId), this.icCases.latest(investmentId)]);
     let stage: 'PIPELINE' | 'IC_APPROVED' | 'PARTLY_DRAWN' | 'CLOSED';
-    if (closings.length === 0) stage = icCase ? 'IC_APPROVED' : 'PIPELINE';
-    else if (icCase && icCase.tranches.length > closings.length) stage = 'PARTLY_DRAWN';
-    else stage = 'CLOSED';
+    if (closings.length === 0) {
+      stage = icCase ? 'IC_APPROVED' : 'PIPELINE';
+    } else if (!icCase) {
+      stage = 'CLOSED';
+    } else {
+      const drawn = new Set(closings.map((c) => c.icTrancheNumber).filter((n): n is number => n !== null));
+      stage = drawn.size >= icCase.tranches.length ? 'CLOSED' : 'PARTLY_DRAWN';
+    }
     return this.portfolio.setDealStage(investmentId, stage);
   }
 

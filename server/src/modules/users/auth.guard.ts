@@ -18,10 +18,10 @@ export class AuthGuard implements CanActivate {
   async canActivate(context: ExecutionContext): Promise<boolean> {
     const request = context.switchToHttp().getRequest<Request & { user?: SessionUser }>();
 
-    // Browsers can't send cross-site JSON or PDF bodies without a CORS preflight, so requiring either on writes
-    // blocks CSRF from plain HTML forms.
-    if (!READ_METHODS.has(request.method) && !request.is(['application/json', 'application/pdf'])) {
-      throw new UnsupportedMediaTypeException('Send requests as JSON (or a PDF file for uploads).');
+    // Browsers can't send cross-site JSON, PDF or email bodies without a CORS preflight, so requiring one of
+    // these on writes blocks CSRF from plain HTML forms.
+    if (!READ_METHODS.has(request.method) && !request.is(['application/json', 'application/pdf', 'message/rfc822'])) {
+      throw new UnsupportedMediaTypeException('Send requests as JSON (or a PDF or email file for uploads).');
     }
 
     const isPublic = this.reflector.getAllAndOverride<boolean>(IS_PUBLIC, [context.getHandler(), context.getClass()]);

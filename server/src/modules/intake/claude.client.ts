@@ -1,6 +1,6 @@
 import Anthropic from '@anthropic-ai/sdk';
 import { HttpException, HttpStatus, Injectable } from '@nestjs/common';
-import type { PdfReader, PdfReadResult } from './pdf-reader';
+import type { DocumentContentType, PdfReader, PdfReadResult } from './pdf-reader';
 
 /** The only code that talks to the Claude API. The production reader. */
 @Injectable()
@@ -14,14 +14,25 @@ export class ClaudeClient implements PdfReader {
   }
 
   /**
-   * Sends a PDF to Claude and returns JSON that matches `schema` (structured outputs).
+   * Sends a document to Claude and returns JSON that matches `schema` (structured outputs).
    * Streams the response so long documents don't hit HTTP timeouts.
    */
-  async readPdfAsJson(pdf: Buffer, system: string, instruction: string, schema: Record<string, unknown>): Promise<PdfReadResult> {
+  async readDocumentAsJson(
+    content: Buffer,
+    contentType: DocumentContentType,
+    system: string,
+    instruction: string,
+    schema: Record<string, unknown>,
+  ): Promise<PdfReadResult> {
     if (!this.isConfigured()) {
       throw new HttpException('Reading documents with Claude is not set up. Add ANTHROPIC_API_KEY to the app\'s variables.', HttpStatus.SERVICE_UNAVAILABLE);
     }
     this.client ??= new Anthropic();
+
+    const documentBlock: Anthropic.Beta.BetaContentBlockParam =
+      contentType === 'application/pdf'
+        ? { type: 'document', source: { type: 'base64', media_type: 'application/pdf', data: content.toString('base64') } }
+        : { type: 'text', text: content.toString('utf-8') };
 
     let message: Anthropic.Beta.BetaMessage;
     try {
@@ -36,10 +47,7 @@ export class ClaudeClient implements PdfReader {
         messages: [
           {
             role: 'user',
-            content: [
-              { type: 'document', source: { type: 'base64', media_type: 'application/pdf', data: pdf.toString('base64') } },
-              { type: 'text', text: instruction },
-            ],
+            content: [documentBlock, { type: 'text', text: instruction }],
           },
         ],
       });

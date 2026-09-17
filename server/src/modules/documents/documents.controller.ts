@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Post, Query, Res, StreamableFile } from '@nestjs/common';
+import { BadRequestException, Body, Controller, Get, Headers, Param, Post, Query, Res, StreamableFile } from '@nestjs/common';
 import type { Response } from 'express';
 import type { DocumentInfo, SessionUser } from '@nksq/contracts';
 import { CurrentUser } from '../../common/public.decorator';
@@ -9,15 +9,18 @@ import { DocumentsService } from './documents.service';
 export class DocumentsController {
   constructor(private readonly documents: DocumentsService) {}
 
-  /** Body is the raw PDF (Content-Type: application/pdf); no multipart parsing involved. */
+  /** Body is the raw file (Content-Type: application/pdf or message/rfc822); no multipart parsing involved. */
   @Post('documents')
   upload(
     @Body() body: unknown,
+    @Headers('content-type') contentType: string | undefined,
     @Query('fileName') fileName: string | undefined,
     @Query('category') category: string | undefined,
     @CurrentUser() user: SessionUser,
   ): Promise<DocumentInfo> {
-    return this.documents.uploadPdf(body, fileName, category, user);
+    if (contentType?.startsWith('message/rfc822')) return this.documents.uploadEmail(body, fileName, category, user);
+    if (contentType?.startsWith('application/pdf')) return this.documents.uploadPdf(body, fileName, category, user);
+    throw new BadRequestException('Upload a PDF or an email (.eml) file.');
   }
 
   @Get('documents/:id')

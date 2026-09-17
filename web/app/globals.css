@@ -92,7 +92,51 @@ p { margin: 0; }
 .nav a:hover { text-decoration: none; color: var(--ink); }
 .nav span.soon { opacity: 0.55; cursor: default; }
 .nav span.soon small { font-family: var(--mono); font-size: 10px; margin-left: 4px; letter-spacing: 0.04em; }
-.user { display: flex; align-items: center; gap: 12px; font-size: 14px; color: var(--muted); white-space: nowrap; }
+.user-menu { position: relative; }
+.user-trigger {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 36px;
+  padding: 0 10px;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: none;
+  color: var(--ink);
+  font: 600 14px var(--body);
+  cursor: pointer;
+  white-space: nowrap;
+}
+.user-trigger:hover { background: var(--surface-2); }
+.user-trigger svg { color: var(--muted); flex: none; }
+.user-dropdown {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  z-index: 20;
+  min-width: 160px;
+  display: grid;
+  gap: 2px;
+  padding: 4px;
+  background: var(--surface);
+  border: 1px solid var(--rule);
+  border-radius: 8px;
+  box-shadow: 0 8px 24px rgb(0 0 0 / 0.12);
+}
+.user-dropdown-item {
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: 8px 10px;
+  border: 0;
+  border-radius: 6px;
+  background: none;
+  color: var(--ink);
+  font: 14px var(--body);
+  cursor: pointer;
+}
+.user-dropdown-item:hover { background: var(--surface-2); }
+.user-dropdown-item:disabled { opacity: 0.55; cursor: not-allowed; }
 
 .page { max-width: 1200px; margin: 0 auto; padding: 28px 20px 64px; display: grid; gap: 24px; }
 .page-head { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 12px 24px; }
@@ -146,8 +190,10 @@ textarea.input { height: auto; min-height: 80px; padding: 8px 10px; resize: vert
 .input-affix span.pre { left: 10px; }
 .input-affix span.post { right: 10px; }
 
-.grid-2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 240px), 1fr)); gap: 16px; }
-.grid-3 { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 200px), 1fr)); gap: 16px; }
+/* align-items: start keeps every field's input at its natural height, so fields sharing a row stay lined up
+   even when one has a longer label or hint than its neighbor (grid's default stretch would misalign them). */
+.grid-2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 240px), 1fr)); gap: 16px; align-items: start; }
+.grid-3 { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 200px), 1fr)); gap: 16px; align-items: start; }
 
 .alert { padding: 10px 14px; border-radius: 6px; font-size: 14px; }
 .alert-error { background: var(--red-soft); color: var(--red); }
@@ -159,11 +205,10 @@ textarea.input { height: auto; min-height: 80px; padding: 8px 10px; resize: vert
 .panel-body { padding: 20px; display: grid; gap: 18px; }
 
 .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 170px), 1fr)); gap: 1px; background: var(--rule); border: 1px solid var(--rule); border-radius: var(--radius); overflow: hidden; }
-.stat { background: var(--surface); padding: 14px 16px; display: grid; gap: 4px; }
+.stat { background: var(--surface); padding: 14px 16px; display: grid; gap: 4px; align-content: start; cursor: default; }
 .stat .label { font-size: 12px; color: var(--muted); }
 .stat .value { font-family: var(--display); font-weight: 600; font-size: 22px; font-variant-numeric: tabular-nums; }
 .stat .value.accent { color: var(--accent); }
-.stat .note { font-size: 12px; color: var(--muted); }
 
 .table-wrap { overflow-x: auto; }
 table { width: 100%; border-collapse: collapse; font-size: 14px; }
@@ -190,7 +235,7 @@ tfoot td { font-weight: 600; background: var(--surface-2); border-top: 1px solid
 .empty { padding: 48px 20px; text-align: center; display: grid; gap: 10px; justify-items: center; }
 .empty p { color: var(--muted); max-width: 46ch; }
 
-.kv { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 200px), 1fr)); gap: 14px 24px; margin: 0; }
+.kv { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 200px), 1fr)); gap: 14px 24px; margin: 0; align-items: start; }
 .kv div { display: grid; gap: 2px; }
 .kv dt { font-size: 12px; color: var(--muted); }
 .kv dd { margin: 0; font-variant-numeric: tabular-nums; }
@@ -271,5 +316,5 @@ tfoot td { font-weight: 600; background: var(--surface-2); border-top: 1px solid
 @media (max-width: 720px) {
   .topbar-inner { gap: 12px; }
   .brand-name span { display: none; }
-  .user .who { display: none; }
+  .user-trigger .who { display: none; }
 }

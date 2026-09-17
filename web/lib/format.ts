@@ -48,6 +48,15 @@ export const fileSize =(bytes: number) => {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 };
 
+export const CAPITAL_EVENT_TYPE_LABELS: Record<string, string> = {
+  SECONDARY_TRANSACTION: 'Secondary transaction',
+  VALUATION_MARK: 'Valuation mark',
+  DIVIDEND: 'Dividend / distribution',
+  CAPITAL_CALL: 'Capital call',
+  TENDER_OFFER: 'Tender offer',
+  OTHER: 'Other',
+};
+
 export const DOCUMENT_CATEGORY_LABELS: Record<string, string> = {
   IC_MEMO: 'IC memo',
   CLOSING: 'Closing',
@@ -63,7 +72,7 @@ export const MONTHS =['January', 'February', 'March', 'April', 'May', 'June', 'J
 export const STATUS_LABELS: Record<InvestmentStatus, string> = {
   PIPELINE: 'Pipeline',
   IC_APPROVED: 'IC approved',
-  PARTLY_DRAWN: 'Partly drawn',
+  PARTLY_DRAWN: 'Invested',
   CLOSED: 'Closed',
   ACTIVE: 'Active',
   EXITED: 'Exited',

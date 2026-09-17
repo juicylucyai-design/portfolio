@@ -4,7 +4,7 @@ import { existsSync, readdirSync } from 'node:fs';
 import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
-import type { PdfReader, PdfReadResult } from './pdf-reader';
+import type { DocumentContentType, PdfReader, PdfReadResult } from './pdf-reader';
 
 const TIMEOUT_MS = 10 * 60 * 1000;
 
@@ -34,9 +34,9 @@ interface CliResult {
 }
 
 /**
- * Local testing only: reads PDFs with the Claude Code CLI from the Claude desktop app, signed in with your Claude
- * account instead of an API key. The PDF is copied to a private temporary folder, Claude Code may only use its Read
- * tool inside that folder, and the answer must match the same JSON schema the API reader uses.
+ * Local testing only: reads documents with the Claude Code CLI from the Claude desktop app, signed in with your
+ * Claude account instead of an API key. The document is copied to a private temporary folder, Claude Code may only
+ * use its Read tool inside that folder, and the answer must match the same JSON schema the API reader uses.
  */
 @Injectable()
 export class ClaudeCodeReader implements PdfReader {
@@ -48,18 +48,30 @@ export class ClaudeCodeReader implements PdfReader {
     return findClaudeCode() !== null;
   }
 
-  async readPdfAsJson(pdf: Buffer, system: string, instruction: string, schema: Record<string, unknown>): Promise<PdfReadResult> {
+  async readDocumentAsJson(
+    content: Buffer,
+    contentType: DocumentContentType,
+    system: string,
+    instruction: string,
+    schema: Record<string, unknown>,
+  ): Promise<PdfReadResult> {
     const exe = findClaudeCode();
     if (!exe) {
       throw new HttpException('Claude Code was not found. Install the Claude desktop app, or set CLAUDE_CODE_PATH.', HttpStatus.SERVICE_UNAVAILABLE);
     }
 
+    const fileName = contentType === 'application/pdf' ? 'document.pdf' : 'document.txt';
+    const readInstruction =
+      contentType === 'application/pdf'
+        ? `Read ${fileName} in the current directory. Read every page (use the pages parameter for long documents).`
+        : `Read ${fileName} in the current directory.`;
+
     const workDir = await mkdtemp(path.join(os.tmpdir(), 'nksq-read-'));
     try {
-      await writeFile(path.join(workDir, 'document.pdf'), pdf);
+      await writeFile(path.join(workDir, fileName), content);
       const args = [
         '-p',
-        `Read document.pdf in the current directory. Read every page (use the pages parameter for long documents). ${instruction}`,
+        `${readInstruction} ${instruction}`,
         '--system-prompt', system,
         '--output-format', 'json',
         '--json-schema', JSON.stringify(schema),
@@ -78,7 +90,7 @@ export class ClaudeCodeReader implements PdfReader {
       const output = await run(exe, args, workDir, env);
       const result = parse(output, exe);
       const model = Object.keys(result.modelUsage ?? {})[0] ?? this.model;
-      this.logger.log(`Read a ${Math.round(pdf.length / 1024)} KB PDF with Claude Code (${model}) in ${((Date.now() - started) / 1000).toFixed(0)}s`);
+      this.logger.log(`Read a ${Math.round(content.length / 1024)} KB document with Claude Code (${model}) in ${((Date.now() - started) / 1000).toFixed(0)}s`);
       return {
         data: result.structured_output,
         model: `claude-code/${model}`,
