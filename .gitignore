@@ -9,3 +9,4 @@ web/next-env.d.ts
 !.env.example
 *.log
 .DS_Store
+*.tsbuildinfo
