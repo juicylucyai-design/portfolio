@@ -3,12 +3,15 @@ import type { IcMemoExtraction } from '@nksq/contracts';
 // What Claude is asked to read from an IC memo, and how its answer is checked before anyone sees it.
 // Bump PROMPT_VERSION whenever the prompt or schema changes; it's stored with every extraction.
 
-export const IC_MEMO_PROMPT_VERSION = 'ic-memo-2026-09-17';
+export const IC_MEMO_PROMPT_VERSION = 'ic-memo-2026-09-17b';
 
 /** Keep in step with the instrument list on the New investment page. */
 export const INSTRUMENTS = ['Preferred equity', 'Common equity', 'SAFE', 'Convertible note', 'Venture debt', 'Fund commitment', 'Other'];
 
-const nullable = (schema: Record<string, unknown>) => ({ anyOf: [schema, { type: 'null' }] });
+// Every extracted value is a plain string, and an empty string means "not in the memo".
+// Nullable (anyOf) fields are deliberately avoided: the API caps a schema at 16 of them because each one
+// multiplies compilation cost. normaliseIcMemo() below turns the strings into checked numbers and dates.
+const text = { type: 'string' };
 const object = (properties: Record<string, unknown>) => ({
   type: 'object',
   properties,
@@ -18,59 +21,50 @@ const object = (properties: Record<string, unknown>) => ({
 
 export const IC_MEMO_SCHEMA = object({
   company: object({
-    companyName: nullable({ type: 'string' }),
-    sector: nullable({ type: 'string' }),
-    geography: nullable({ type: 'string' }),
-    instrument: nullable({ type: 'string', enum: INSTRUMENTS }),
-    dealLead: nullable({ type: 'string' }),
-    fiscalYearEndMonth: nullable({ type: 'integer' }),
+    companyName: text,
+    sector: text,
+    geography: text,
+    instrument: { type: 'string', enum: [...INSTRUMENTS, ''] },
+    dealLead: text,
+    fiscalYearEndMonth: text,
   }),
   icCase: object({
-    approvedOn: nullable({ type: 'string', format: 'date' }),
-    entryPostMoneyUsd: nullable({ type: 'number' }),
-    entryOwnershipPct: nullable({ type: 'number' }),
-    dilutionToExitPct: nullable({ type: 'number' }),
-    exitYear: nullable({ type: 'integer' }),
-    exitValuationUsd: nullable({ type: 'number' }),
-    notes: nullable({ type: 'string' }),
+    approvedOn: text,
+    entryPostMoneyUsd: text,
+    entryOwnershipPct: text,
+    dilutionToExitPct: text,
+    exitYear: text,
+    exitValuationUsd: text,
+    notes: text,
     tranches: {
       type: 'array',
-      items: object({
-        amountUsd: nullable({ type: 'number' }),
-        expectedDate: nullable({ type: 'string', format: 'date' }),
-        milestone: nullable({ type: 'string' }),
-      }),
+      items: object({ amountUsd: text, expectedDate: text, milestone: text }),
     },
   }),
-  statedReturns: object({
-    irrPct: nullable({ type: 'number' }),
-    moic: nullable({ type: 'number' }),
-  }),
+  statedReturns: object({ irrPct: text, moic: text }),
   currency: object({
-    memoCurrency: nullable({ type: 'string' }),
+    memoCurrency: text,
     convertedToUsd: { type: 'boolean' },
-    fxNote: nullable({ type: 'string' }),
+    fxNote: text,
   }),
   sources: {
     type: 'array',
-    items: object({
-      field: { type: 'string' },
-      page: nullable({ type: 'integer' }),
-      quote: { type: 'string' },
-    }),
+    items: object({ field: text, page: { type: 'integer' }, quote: text }),
   },
-  warnings: { type: 'array', items: { type: 'string' } },
+  warnings: { type: 'array', items: text },
 });
 
 export const IC_MEMO_SYSTEM_PROMPT = `You read investment committee (IC) memos for NKSquared, a private investment firm, and extract the figures its portfolio system needs to record a new investment and its IC-approved projection.
 
-The extracted values pre-fill a form that a person reviews before saving, so accuracy matters more than completeness. Use null for anything the memo does not state or let you derive with confidence. Never invent a figure.
+The extracted values pre-fill a form that a person reviews before saving, so accuracy matters more than completeness. Use an empty string for anything the memo does not state or let you derive with confidence. Never invent a figure.
+
+Format: every value is a string. Write numbers as plain digits with an optional decimal point and minus sign, no currency symbols, commas, units or percent signs (25000000, 20, 24.5). Write dates as YYYY-MM-DD. Write years and months as digits (2031, 3). In sources, use page 0 when you can't tell the page.
 
 Currency: the portfolio system works only in US dollars.
 - If the memo's amounts are in USD, use them as stated.
 - If they are in another currency and the memo gives an exchange rate, convert every amount to USD with that rate, set convertedToUsd to true, and describe the rate in fxNote (for example "INR converted at 83.2 per USD, as stated on page 3").
-- If there is no rate in the memo, leave the USD amount fields null, set convertedToUsd to false, name the currency in memoCurrency, and add a warning.
-- Write amounts as plain numbers in whole dollars: "$25M" is 25000000, "$1.2bn" is 1200000000.
+- If there is no rate in the memo, leave the USD amount fields empty, set convertedToUsd to false, name the currency in memoCurrency, and add a warning.
+- Write amounts in whole dollars: "$25M" is 25000000, "$1.2bn" is 1200000000.
 
 Field meanings:
 - company.companyName: the portfolio company's legal or trading name, not NKSquared's.
@@ -80,7 +74,7 @@ Field meanings:
 - icCase.approvedOn: the date of the IC meeting or approval. If only the memo's own date is given, use it and add a warning saying so.
 - icCase.entryPostMoneyUsd: the company's post-money valuation at NKSquared's entry.
 - icCase.entryOwnershipPct: NKSquared's fully diluted ownership at entry, as a percentage from 0 to 100.
-- icCase.dilutionToExitPct: expected dilution from future rounds before exit, as a percentage from 0 to 100. If the memo gives ownership at entry and at exit instead, compute 100 × (1 − exit ÷ entry). If it says nothing about dilution, use null.
+- icCase.dilutionToExitPct: expected dilution from future rounds before exit, as a percentage from 0 to 100. If the memo gives ownership at entry and at exit instead, compute 100 × (1 − exit ÷ entry). If it says nothing about dilution, leave it empty.
 - icCase.exitYear: the calendar year of the projected exit. If the memo gives a holding period instead, add it to the expected closing year.
 - icCase.exitValuationUsd: the company's equity valuation at exit. If the memo only gives NKSquared's exit proceeds and ownership at exit, derive valuation = proceeds ÷ ownership at exit, and add a warning describing the derivation.
 - icCase.tranches: each planned payment by NKSquared, with its amount and expected date, in order. A single upfront investment is one tranche dated at the expected closing (or the approval date if no closing date is given). Put any condition for release, such as a milestone, in milestone.
@@ -90,7 +84,7 @@ Field meanings:
 When the memo shows several scenarios, use the base or expected case and add a warning naming which case you used.
 
 sources: for each value you filled in, give the field path (for example "icCase.exitYear"), the PDF page number it came from, and a short quote of at most 20 words.
-warnings: anything a reviewer should double-check: assumptions, derivations, conflicting figures, or values you left null because the memo was ambiguous.`;
+warnings: anything a reviewer should double-check: assumptions, derivations, conflicting figures, or values you left empty because the memo was ambiguous.`;
 
 export const IC_MEMO_INSTRUCTION = 'Extract the IC memo fields from this document.';
 
@@ -119,8 +113,12 @@ export function normaliseIcMemo(raw: unknown): Normalised {
 
   const text = (value: unknown, max = 200): string | null => (typeof value === 'string' && value.trim() ? value.trim().slice(0, max) : null);
 
-  const number = (value: unknown, label: string, range: { min?: number; max?: number; above?: number; below?: number; integer?: boolean }): number | null => {
-    if (value === null || value === undefined) return null;
+  const isBlank = (value: unknown) => value === null || value === undefined || (typeof value === 'string' && value.trim() === '');
+
+  const number = (raw: unknown, label: string, range: { min?: number; max?: number; above?: number; below?: number; integer?: boolean }): number | null => {
+    if (isBlank(raw)) return null;
+    // Numbers arrive as strings; tolerate stray formatting like "25,000,000", "$25000000" or "24.5%".
+    const value = typeof raw === 'string' ? Number(raw.replace(/[,$%\s]/g, '')) : raw;
     const ok =
       typeof value === 'number' &&
       Number.isFinite(value) &&
@@ -130,14 +128,15 @@ export function normaliseIcMemo(raw: unknown): Normalised {
       (range.above === undefined || value > range.above) &&
       (range.below === undefined || value < range.below);
     if (!ok) {
-      warnings.push(`Ignored ${label} (${String(value)}) because it is outside the expected range.`);
+      warnings.push(`Ignored ${label} (${String(raw)}) because it is not a number in the expected range.`);
       return null;
     }
-    return value;
+    return value as number;
   };
 
-  const date = (value: unknown, label: string): string | null => {
-    if (value === null || value === undefined) return null;
+  const date = (raw: unknown, label: string): string | null => {
+    if (isBlank(raw)) return null;
+    const value = typeof raw === 'string' ? raw.trim() : raw;
     if (typeof value === 'string' && DATE.test(value)) {
       const [year, month, day] = value.split('-').map(Number);
       const parsed = new Date(Date.UTC(year, month - 1, day));

@@ -82,7 +82,7 @@ function toHttpError(error: unknown): HttpException {
     return new HttpException('Claude is busy right now. Try again in a minute.', HttpStatus.TOO_MANY_REQUESTS);
   }
   if (error instanceof Anthropic.BadRequestError) {
-    return new HttpException(`Claude could not read this PDF: ${error.message}`, HttpStatus.UNPROCESSABLE_ENTITY);
+    return new HttpException(`The Claude API rejected the request: ${error.message}`, HttpStatus.UNPROCESSABLE_ENTITY);
   }
   if (error instanceof Anthropic.APIError) {
     return new HttpException(`The Claude API returned an error (${error.status ?? 'network'}). Try again.`, HttpStatus.BAD_GATEWAY);
