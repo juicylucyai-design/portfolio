@@ -90,8 +90,11 @@ function draftFromExtraction(extracted: ExtractedClosing, fallback: Draft): Draf
     postMoneyValuationUsd: toText(extracted.postMoneyValuationUsd),
     fullyDilutedSharesAfter: toText(extracted.fullyDilutedSharesAfter),
     ownershipPctAfter: plain(extracted.ownershipPctAfter),
-    // A figure the document states itself takes precedence; otherwise keep computing it from shares held.
-    ownershipAuto: extracted.ownershipPctAfter === null,
+    // Always compute cumulative ownership from shares held so far ÷ fully diluted, even when the document
+    // states its own ownership figure — closing documents often label a tranche's own stake "total holding",
+    // which is only correct for the first closing. The computed value corrects it as soon as shares and fully
+    // diluted shares are known; a person can still switch back to typing a figure by hand if needed.
+    ownershipAuto: true,
     notes: extracted.notes ?? '',
     expenses: extracted.expenses.map((e) => ({ key: expenseKey++, category: e.category, description: e.description ?? '', amount: toText(e.amountUsd) })),
   };

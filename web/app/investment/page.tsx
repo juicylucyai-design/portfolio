@@ -12,6 +12,7 @@ import { ClosingForm } from '@/components/ClosingForm';
 import { ConfirmDialog, type ConfirmDialogHandle } from '@/components/ConfirmDialog';
 import { DeleteInvestment } from '@/components/DeleteInvestment';
 import { IcCaseForm } from '@/components/IcCaseForm';
+import { FinancialPerformanceSection } from '@/components/ProjectionChart';
 import { Stat } from '@/components/Stat';
 import { api, documentUrl } from '@/lib/api';
 import {
@@ -220,7 +221,10 @@ function InvestmentDetail() {
             {position && <PositionView position={position} />}
 
             {tab === 'performance' && (
-              <ValuationHistory closings={closings} capitalEvents={capitalEvents} icCase={current} position={position} />
+              <>
+                <ValuationHistory closings={closings} capitalEvents={capitalEvents} icCase={current} position={position} />
+                <FinancialPerformanceSection investmentId={investment.id} />
+              </>
             )}
 
             {tab === 'carry' && <CarryTermsPanel investmentId={investment.id} companyName={investment.companyName} />}
@@ -273,7 +277,7 @@ function InvestmentDetail() {
           </div>
         </section>
       ) : (
-        <IcCaseView icCase={shown} isCurrent={shown.id === current?.id} closed={closings.length > 0} onRevise={() => setFormOpen(true)} />
+        <IcCaseView icCase={shown} isCurrent={shown.id === current?.id} onRevise={() => setFormOpen(true)} />
       )}
 
       {icCases.length > 0 && tab === 'overview' && !formOpen && !closingFormOpen && !capitalEventFormOpen && (
@@ -292,7 +296,6 @@ function InvestmentDetail() {
                   <th className="num">Exit year</th>
                   <th className="num">Proj. MOIC</th>
                   <th className="num">Proj. IRR</th>
-                  <th>Recorded by</th>
                 </tr>
               </thead>
               <tbody>
@@ -312,7 +315,6 @@ function InvestmentDetail() {
                     <td className="num">{icCase.exitYear}</td>
                     <td className="num">{multiple(icCase.projectedMoic)}</td>
                     <td className="num">{rate(icCase.projectedIrr)}</td>
-                    <td>{icCase.createdBy ?? '—'}</td>
                   </tr>
                 ))}
               </tbody>
@@ -724,7 +726,7 @@ function CapitalEventsView(props: { capitalEvents: CapitalEvent[]; documents: Do
   );
 }
 
-function IcCaseView({ icCase, isCurrent, closed, onRevise }: { icCase: IcCase; isCurrent: boolean; closed: boolean; onRevise: () => void }) {
+function IcCaseView({ icCase, isCurrent, onRevise }: { icCase: IcCase; isCurrent: boolean; onRevise: () => void }) {
   return (
     <section className="panel">
       <div className="panel-head">
@@ -744,11 +746,6 @@ function IcCaseView({ icCase, isCurrent, closed, onRevise }: { icCase: IcCase; i
         )}
       </div>
       <div className="panel-body">
-        {closed && (
-          <div className="alert alert-info">
-            Closing figures take precedence. This IC approval is kept for reference, and its exit year, exit valuation and dilution are used to project returns on the actual position.
-          </div>
-        )}
         <div className="stats">
           <Stat label="Commitment" value={usd(icCase.commitmentUsd)} note={`${icCase.tranches.length} tranche${icCase.tranches.length === 1 ? '' : 's'}.`} />
           <Stat label="Projected proceeds" value={usd(icCase.projectedProceedsUsd)} note={`On 31 Dec ${icCase.exitYear}.`} />
@@ -762,7 +759,7 @@ function IcCaseView({ icCase, isCurrent, closed, onRevise }: { icCase: IcCase; i
           <div><dt>Dilution to exit</dt><dd>{percent(icCase.dilutionToExitPct)}</dd></div>
           <div><dt>Ownership at exit</dt><dd>{percent(icCase.exitOwnershipPct)}</dd></div>
           <div><dt>Valuation at exit</dt><dd>{usd(icCase.exitValuationUsd)}</dd></div>
-          <div><dt>Recorded</dt><dd>{date(icCase.createdAt)}{icCase.createdBy ? ` by ${icCase.createdBy}` : ''}</dd></div>
+          <div><dt>Recorded</dt><dd>{date(icCase.createdAt)}</dd></div>
         </dl>
 
         <div className="table-wrap" style={{ border: '1px solid var(--rule)', borderRadius: 6 }}>

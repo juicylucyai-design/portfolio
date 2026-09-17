@@ -20,6 +20,7 @@ const ic: IcCaseSummary = {
     { trancheNumber: 1, amountUsd: 6_000_000, expectedDate: '2026-09-01', milestone: null },
     { trancheNumber: 2, amountUsd: 4_000_000, expectedDate: '2027-06-01', milestone: null },
   ],
+  financials: [],
 };
 
 test('no closing yet: the IC approval is the position', () => {

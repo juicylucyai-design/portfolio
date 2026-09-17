@@ -73,7 +73,7 @@ export const STATUS_LABELS: Record<InvestmentStatus, string> = {
   PIPELINE: 'Pipeline',
   IC_APPROVED: 'IC approved',
   PARTLY_DRAWN: 'Invested',
-  CLOSED: 'Closed',
+  CLOSED: 'Completed',
   ACTIVE: 'Active',
   EXITED: 'Exited',
   WRITTEN_OFF: 'Written off',

@@ -1,8 +1,15 @@
 import { HttpException, Inject, Injectable } from '@nestjs/common';
-import type { CapitalEventExtraction, ClosingExtraction, IcMemoExtraction, IntakeStatus, SessionUser } from '@nksq/contracts';
+import type { CapitalEventExtraction, ClosingExtraction, FinancialStatementExtraction, IcMemoExtraction, IntakeStatus, SessionUser } from '@nksq/contracts';
 import { DocumentsService } from '../documents';
 import { CAPITAL_EVENT_INSTRUCTION, CAPITAL_EVENT_PROMPT_VERSION, CAPITAL_EVENT_SCHEMA, CAPITAL_EVENT_SYSTEM_PROMPT, normaliseCapitalEvent } from './capital-event.extraction';
 import { emailToText } from './email';
+import {
+  FINANCIAL_STATEMENT_INSTRUCTION,
+  FINANCIAL_STATEMENT_PROMPT_VERSION,
+  FINANCIAL_STATEMENT_SCHEMA,
+  FINANCIAL_STATEMENT_SYSTEM_PROMPT,
+  normaliseFinancialStatement,
+} from './financial-statement.extraction';
 import { PDF_READER, type PdfReader } from './pdf-reader';
 import { CLOSING_INSTRUCTION, CLOSING_PROMPT_VERSION, CLOSING_SCHEMA, CLOSING_SYSTEM_PROMPT, normaliseClosing } from './closing.extraction';
 import { IC_MEMO_INSTRUCTION, IC_MEMO_PROMPT_VERSION, IC_MEMO_SCHEMA, IC_MEMO_SYSTEM_PROMPT, normaliseIcMemo } from './ic-memo.extraction';
@@ -44,6 +51,15 @@ const CAPITAL_EVENT: ExtractionSpec<ReturnType<typeof normaliseCapitalEvent>> = 
   normalise: normaliseCapitalEvent,
 };
 
+const FINANCIAL_STATEMENT: ExtractionSpec<ReturnType<typeof normaliseFinancialStatement>> = {
+  kind: 'FINANCIAL_STATEMENT',
+  promptVersion: FINANCIAL_STATEMENT_PROMPT_VERSION,
+  system: FINANCIAL_STATEMENT_SYSTEM_PROMPT,
+  instruction: FINANCIAL_STATEMENT_INSTRUCTION,
+  schema: FINANCIAL_STATEMENT_SCHEMA,
+  normalise: normaliseFinancialStatement,
+};
+
 @Injectable()
 export class IntakeService {
   constructor(
@@ -66,6 +82,10 @@ export class IntakeService {
 
   extractCapitalEvent(documentId: number, user: SessionUser): Promise<CapitalEventExtraction> {
     return this.extract(documentId, CAPITAL_EVENT, user);
+  }
+
+  extractFinancialStatement(documentId: number, user: SessionUser): Promise<FinancialStatementExtraction> {
+    return this.extract(documentId, FINANCIAL_STATEMENT, user);
   }
 
   deleteForDocuments(documentIds: number[]): Promise<number> {

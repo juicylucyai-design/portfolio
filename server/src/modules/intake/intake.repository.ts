@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { Db } from '../../database/db';
 
-export type ExtractionKind = 'IC_MEMO' | 'CLOSING' | 'CAPITAL_EVENT';
+export type ExtractionKind = 'IC_MEMO' | 'CLOSING' | 'CAPITAL_EVENT' | 'FINANCIAL_STATEMENT';
 
 export interface NewExtraction {
   documentId: number;

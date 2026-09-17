@@ -4,7 +4,7 @@ import { asRecord, createReaders, object, readSources, readWarnings, SOURCES_SCH
 // What Claude is asked to read from an IC memo, and how its answer is checked before anyone sees it.
 // Bump the prompt version whenever the prompt or schema changes; it's stored with every extraction.
 
-export const IC_MEMO_PROMPT_VERSION = 'ic-memo-2026-09-17c';
+export const IC_MEMO_PROMPT_VERSION = 'ic-memo-2026-09-17d';
 
 /** Keep in step with the instrument list on the New investment page. */
 export const INSTRUMENTS = ['Preferred equity', 'Common equity', 'SAFE', 'Convertible note', 'Venture debt', 'Fund commitment', 'Other'];
@@ -28,6 +28,7 @@ export const IC_MEMO_SCHEMA = object({
     exitValuationUsd: TEXT,
     notes: TEXT,
     tranches: { type: 'array', items: object({ amountUsd: TEXT, expectedDate: TEXT, milestone: TEXT }) },
+    financials: { type: 'array', items: object({ year: TEXT, revenueUsd: TEXT, ebitdaUsd: TEXT }) },
   }),
   statedReturns: object({ irrPct: TEXT, moic: TEXT }),
   currency: object({ memoCurrency: TEXT, convertedToUsd: { type: 'boolean' }, fxNote: TEXT }),
@@ -61,6 +62,7 @@ Field meanings:
 - icCase.exitValuationUsd: the company's equity valuation at exit. If the memo only gives NKSquared's exit proceeds and ownership at exit, derive valuation = proceeds ÷ ownership at exit, and add a warning describing the derivation.
 - icCase.tranches: each planned payment by NKSquared, with its amount and expected date, in order. A single upfront investment is one tranche dated at the expected closing (or the approval date if no closing date is given). Put any condition for release, such as a milestone, in milestone.
 - icCase.notes: two or three sentences on the investment thesis and key conditions of approval.
+- icCase.financials: the company's financial projections table (historical and/or projected), one entry per fiscal year, with that year's total revenue and EBITDA. Use the base or expected case. Leave revenueUsd or ebitdaUsd empty for a year the memo doesn't state, but still include the year if the other figure is given. Skip this entirely if the memo has no year-by-year revenue or EBITDA figures.
 - statedReturns: the projected IRR (as a percentage, e.g. 24.5) and MOIC (e.g. 3.2) exactly as the memo states them for the base case.
 
 When the memo shows several scenarios, use the base or expected case and add a warning naming which case you used.
@@ -95,6 +97,18 @@ export function normaliseIcMemo(raw: unknown): Normalised {
     })
     .filter((t) => t.amountUsd !== null || t.expectedDate !== null || t.milestone !== null);
 
+  const financials = (Array.isArray(ic.financials) ? ic.financials : [])
+    .slice(0, 40)
+    .map((item, index) => {
+      const financial = asRecord(item);
+      return {
+        year: number(financial.year, `financial projection ${index + 1} year`, { min: 1990, max: 2200, integer: true }),
+        revenueUsd: number(financial.revenueUsd, `financial projection ${index + 1} revenue`, { min: 0 }),
+        ebitdaUsd: number(financial.ebitdaUsd, `financial projection ${index + 1} EBITDA`, { min: -1e15, max: 1e15 }),
+      };
+    })
+    .filter((f) => f.year !== null && (f.revenueUsd !== null || f.ebitdaUsd !== null));
+
   return {
     investment: {
       companyName: text(company.companyName),
@@ -114,6 +128,7 @@ export function normaliseIcMemo(raw: unknown): Normalised {
       exitValuationUsd: number(ic.exitValuationUsd, 'exit valuation', { min: 0 }),
       notes: text(ic.notes, 4000),
       tranches,
+      financials,
     },
     statedReturns: {
       irrPct: number(returns.irrPct, 'stated IRR', { min: -100, max: 10000 }),

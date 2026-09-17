@@ -11,6 +11,7 @@ test('single tranche: $10M for 20%, exit at $125M valuation in 2030', () => {
     exitYear: 2030,
     exitValuationUsd: 125_000_000,
     tranches: [{ amountUsd: 10_000_000, expectedDate: '2026-12-31' }],
+    financials: [],
   });
   assert.equal(projection.commitmentUsd, 10_000_000);
   assert.equal(projection.projectedProceedsUsd, 25_000_000);
@@ -32,6 +33,7 @@ test('three tranches with 25% dilution to exit', () => {
       { amountUsd: 3_000_000, expectedDate: '2026-08-20' },
       { amountUsd: 3_000_000, expectedDate: '2027-06-30' },
     ],
+    financials: [],
   });
   assert.equal(projection.commitmentUsd, 10_000_000);
   assert.equal(projection.exitOwnershipPct, 15);
@@ -49,6 +51,7 @@ test('zero exit valuation projects a total loss with no IRR', () => {
     exitYear: 2029,
     exitValuationUsd: 0,
     tranches: [{ amountUsd: 1_000_000, expectedDate: '2026-02-01' }],
+    financials: [],
   });
   assert.equal(projection.projectedMoic, 0);
   assert.equal(projection.projectedIrr, null);

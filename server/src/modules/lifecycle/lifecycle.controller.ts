@@ -1,9 +1,18 @@
 import { BadRequestException, Body, Controller, Delete, HttpCode, Param, Post } from '@nestjs/common';
-import type { CreateFromIcMemoResponse, DeleteInvestmentResult, InvestmentStatus, SaveCapitalEventResponse, SaveClosingsResponse, SessionUser } from '@nksq/contracts';
+import type {
+  CreateFromIcMemoResponse,
+  DeleteInvestmentResult,
+  InvestmentStatus,
+  SaveCapitalEventResponse,
+  SaveClosingsResponse,
+  SaveFinancialActualResponse,
+  SessionUser,
+} from '@nksq/contracts';
 import { CurrentUser } from '../../common/public.decorator';
 import { asObject, parseId, requireNumber, requireString } from '../../common/validation';
 import { parseCapitalEventInput } from '../capital-event';
 import { parseClosingInput } from '../closing';
+import { parseFinancialActualInput } from '../financial-actual';
 import { parseIcCaseInput } from '../ic-case';
 import { parseCreateInvestment } from '../portfolio';
 import { LifecycleService } from './lifecycle.service';
@@ -57,6 +66,22 @@ export class LifecycleController {
     @CurrentUser() user: SessionUser,
   ): Promise<{ documentsDeleted: number }> {
     return this.lifecycle.deleteCapitalEvent(parseId(id, 'Investment id'), parseId(eventId, 'Capital event id'), user);
+  }
+
+  @Post('investments/:id/financial-actuals')
+  saveFinancialActual(@Param('id') id: string, @Body() body: unknown, @CurrentUser() user: SessionUser): Promise<SaveFinancialActualResponse> {
+    const input = asObject(body);
+    const documentId = input.documentId === null || input.documentId === undefined ? null : requireNumber(input, 'documentId', 'Statement document', { integer: true, min: 1 });
+    return this.lifecycle.saveFinancialActual(parseId(id, 'Investment id'), { documentId, financialActual: parseFinancialActualInput(input.financialActual) }, user);
+  }
+
+  @Delete('investments/:id/financial-actuals/:actualId')
+  deleteFinancialActual(
+    @Param('id') id: string,
+    @Param('actualId') actualId: string,
+    @CurrentUser() user: SessionUser,
+  ): Promise<{ documentsDeleted: number }> {
+    return this.lifecycle.deleteFinancialActual(parseId(id, 'Investment id'), parseId(actualId, 'Financial actual id'), user);
   }
 
   @Delete('investments/:id')

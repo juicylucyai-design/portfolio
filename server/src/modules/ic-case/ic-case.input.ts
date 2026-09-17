@@ -1,8 +1,9 @@
 import { BadRequestException } from '@nestjs/common';
-import type { IcCaseInput, IcTrancheInput } from '@nksq/contracts';
-import { asObject, optionalString, requireArray, requireDate, requireNumber } from '../../common/validation';
+import type { IcCaseInput, IcFinancialInput, IcTrancheInput } from '@nksq/contracts';
+import { asObject, optionalNumber, optionalString, requireArray, requireDate, requireNumber } from '../../common/validation';
 
 const MAX_TRANCHES = 20;
+const MAX_FINANCIALS = 40;
 
 /** Validates an IC case from a request body. Error messages use the form's field labels. */
 export function parseIcCaseInput(body: unknown): IcCaseInput {
@@ -19,6 +20,18 @@ export function parseIcCaseInput(body: unknown): IcCaseInput {
     };
   });
 
+  const financialInputs = Array.isArray(input.financials) ? input.financials : [];
+  if (financialInputs.length > MAX_FINANCIALS) throw new BadRequestException(`An IC case can have at most ${MAX_FINANCIALS} years of financial projections.`);
+
+  const financials: IcFinancialInput[] = financialInputs.map((raw, index) => {
+    const financial = asObject(raw, `Financial projection ${index + 1}`);
+    return {
+      year: requireNumber(financial, 'year', `Financial projection ${index + 1} year`, { integer: true, min: 1990, max: 2200 }),
+      revenueUsd: optionalNumber(financial, 'revenueUsd', `Financial projection ${index + 1} revenue`, { min: 0 }),
+      ebitdaUsd: optionalNumber(financial, 'ebitdaUsd', `Financial projection ${index + 1} EBITDA`),
+    };
+  });
+
   return {
     approvedOn: requireDate(input, 'approvedOn', 'IC approval date'),
     entryPostMoneyUsd: requireNumber(input, 'entryPostMoneyUsd', 'Entry post-money valuation', { greaterThan: 0 }),
@@ -28,5 +41,6 @@ export function parseIcCaseInput(body: unknown): IcCaseInput {
     exitValuationUsd: requireNumber(input, 'exitValuationUsd', 'Exit valuation', { min: 0 }),
     notes: optionalString(input, 'notes', 'Notes', 4000),
     tranches,
+    financials,
   };
 }

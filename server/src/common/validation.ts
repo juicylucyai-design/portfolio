@@ -31,6 +31,16 @@ export function optionalString(input: Input, key: string, label: string, max = 5
   return value || null;
 }
 
+export function optionalNumber(input: Input, key: string, label: string, options: { min?: number; max?: number } = {}): number | null {
+  const raw = input[key];
+  if (raw === undefined || raw === null || raw === '') return null;
+  const value = typeof raw === 'string' && raw.trim() !== '' ? Number(raw.replace(/,/g, '')) : raw;
+  if (typeof value !== 'number' || !Number.isFinite(value)) throw new BadRequestException(`${label} must be a number.`);
+  if (options.min !== undefined && value < options.min) throw new BadRequestException(`${label} must be at least ${options.min}.`);
+  if (options.max !== undefined && value > options.max) throw new BadRequestException(`${label} must be at most ${options.max}.`);
+  return value;
+}
+
 export function requireNumber(
   input: Input,
   key: string,

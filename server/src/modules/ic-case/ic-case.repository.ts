@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import type { IcCase, IcCaseInput, IcCaseSummary, IcProjection, IcTranche } from '@nksq/contracts';
+import type { IcCase, IcCaseInput, IcCaseSummary, IcFinancialInput, IcProjection, IcTranche } from '@nksq/contracts';
 import { Db } from '../../database/db';
 
 interface IcCaseRow {
@@ -31,6 +31,13 @@ interface TrancheRow {
   milestone: string | null;
 }
 
+interface FinancialRow {
+  ic_case_id: number;
+  year: number;
+  revenue_usd: number | null;
+  ebitda_usd: number | null;
+}
+
 /** The only code that reads or writes the ic_cases and ic_tranches tables. */
 @Injectable()
 export class IcCaseRepository {
@@ -41,17 +48,9 @@ export class IcCaseRepository {
     const cases = await this.db.query<IcCaseRow>('SELECT * FROM ic_cases WHERE investment_id = $1 ORDER BY version DESC', [investmentId]);
     if (cases.length === 0) return [];
 
-    const tranches = await this.db.query<TrancheRow>(
-      `SELECT ic_case_id, tranche_number, amount_usd, expected_date, milestone
-       FROM ic_tranches WHERE ic_case_id = ANY($1::bigint[]) ORDER BY tranche_number`,
-      [cases.map((row) => row.id)],
-    );
-    const byCase = new Map<number, IcTranche[]>();
-    for (const row of tranches) {
-      const list = byCase.get(row.ic_case_id) ?? [];
-      list.push({ trancheNumber: row.tranche_number, amountUsd: row.amount_usd, expectedDate: row.expected_date, milestone: row.milestone });
-      byCase.set(row.ic_case_id, list);
-    }
+    const caseIds = cases.map((row) => row.id);
+    const byCase = await this.fetchTranches(caseIds);
+    const financialsByCase = await this.fetchFinancials(caseIds);
 
     return cases.map((row) => ({
       id: row.id,
@@ -74,6 +73,7 @@ export class IcCaseRepository {
       createdBy: row.created_by,
       createdAt: row.created_at.toISOString(),
       tranches: byCase.get(row.id) ?? [],
+      financials: financialsByCase.get(row.id) ?? [],
     }));
   }
 
@@ -84,17 +84,9 @@ export class IcCaseRepository {
     );
     if (rows.length === 0) return [];
 
-    const tranches = await this.db.query<TrancheRow>(
-      `SELECT ic_case_id, tranche_number, amount_usd, expected_date, milestone
-       FROM ic_tranches WHERE ic_case_id = ANY($1::bigint[]) ORDER BY tranche_number`,
-      [rows.map((row) => row.id)],
-    );
-    const byCase = new Map<number, IcTranche[]>();
-    for (const row of tranches) {
-      const list = byCase.get(row.ic_case_id) ?? [];
-      list.push({ trancheNumber: row.tranche_number, amountUsd: row.amount_usd, expectedDate: row.expected_date, milestone: row.milestone });
-      byCase.set(row.ic_case_id, list);
-    }
+    const caseIds = rows.map((row) => row.id);
+    const byCase = await this.fetchTranches(caseIds);
+    const financialsByCase = await this.fetchFinancials(caseIds);
 
     return rows.map((row) => ({
       investmentId: row.investment_id,
@@ -109,7 +101,38 @@ export class IcCaseRepository {
       entryOwnershipPct: row.entry_ownership_pct,
       dilutionToExitPct: row.dilution_to_exit_pct,
       tranches: byCase.get(row.id) ?? [],
+      financials: financialsByCase.get(row.id) ?? [],
     }));
+  }
+
+  private async fetchTranches(caseIds: number[]): Promise<Map<number, IcTranche[]>> {
+    const tranches = await this.db.query<TrancheRow>(
+      `SELECT ic_case_id, tranche_number, amount_usd, expected_date, milestone
+       FROM ic_tranches WHERE ic_case_id = ANY($1::bigint[]) ORDER BY tranche_number`,
+      [caseIds],
+    );
+    const byCase = new Map<number, IcTranche[]>();
+    for (const row of tranches) {
+      const list = byCase.get(row.ic_case_id) ?? [];
+      list.push({ trancheNumber: row.tranche_number, amountUsd: row.amount_usd, expectedDate: row.expected_date, milestone: row.milestone });
+      byCase.set(row.ic_case_id, list);
+    }
+    return byCase;
+  }
+
+  private async fetchFinancials(caseIds: number[]): Promise<Map<number, IcFinancialInput[]>> {
+    const financials = await this.db.query<FinancialRow>(
+      `SELECT ic_case_id, year, revenue_usd, ebitda_usd
+       FROM ic_financials WHERE ic_case_id = ANY($1::bigint[]) ORDER BY year`,
+      [caseIds],
+    );
+    const byCase = new Map<number, IcFinancialInput[]>();
+    for (const row of financials) {
+      const list = byCase.get(row.ic_case_id) ?? [];
+      list.push({ year: row.year, revenueUsd: row.revenue_usd, ebitdaUsd: row.ebitda_usd });
+      byCase.set(row.ic_case_id, list);
+    }
+    return byCase;
   }
 
   /** Deletes every version and its tranches (tranches cascade). Returns how many versions were removed. */
@@ -150,6 +173,12 @@ export class IcCaseRepository {
         await tx.query(
           'INSERT INTO ic_tranches (ic_case_id, tranche_number, amount_usd, expected_date, milestone) VALUES ($1, $2, $3, $4, $5)',
           [created.id, index + 1, tranche.amountUsd, tranche.expectedDate, tranche.milestone ?? null],
+        );
+      }
+      for (const financial of input.financials) {
+        await tx.query(
+          'INSERT INTO ic_financials (ic_case_id, year, revenue_usd, ebitda_usd) VALUES ($1, $2, $3, $4)',
+          [created.id, financial.year, financial.revenueUsd, financial.ebitdaUsd],
         );
       }
       return created.id;

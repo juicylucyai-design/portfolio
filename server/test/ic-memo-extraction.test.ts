@@ -24,6 +24,10 @@ const answer = {
       { amountUsd: '6000000', expectedDate: '2026-09-30', milestone: 'At signing' },
       { amountUsd: '4,000,000', expectedDate: '2027-06-30', milestone: 'ARR above $5M' },
     ],
+    financials: [
+      { year: '2027', revenueUsd: '5000000', ebitdaUsd: '-500000' },
+      { year: '2028', revenueUsd: '12000000', ebitdaUsd: '2000000' },
+    ],
   },
   statedReturns: { irrPct: '24.5%', moic: '3' },
   currency: { memoCurrency: 'USD', convertedToUsd: false, fxNote: '' },
@@ -42,6 +46,10 @@ test('turns string answers into numbers, dates and nulls', () => {
   assert.equal(result.icCase.dilutionToExitPct, null);
   assert.equal(result.icCase.exitYear, 2031);
   assert.deepEqual(result.icCase.tranches.map((t) => t.amountUsd), [6_000_000, 4_000_000]);
+  assert.deepEqual(result.icCase.financials, [
+    { year: 2027, revenueUsd: 5_000_000, ebitdaUsd: -500_000 },
+    { year: 2028, revenueUsd: 12_000_000, ebitdaUsd: 2_000_000 },
+  ]);
   assert.equal(result.statedReturns.irrPct, 24.5);
   assert.equal(result.currency.fxNote, null);
   assert.deepEqual(result.sources[0], { field: 'icCase.exitYear', page: 7, quote: 'Base case exit in FY2031' });

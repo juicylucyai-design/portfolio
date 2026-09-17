@@ -11,6 +11,7 @@ import { INSTRUMENTS, MONTHS } from '@/lib/format';
 
 const blankInvestment = (): CreateInvestmentRequest => ({
   companyName: '',
+  businessSummary: '',
   sector: '',
   geography: '',
   fiscalYearEndMonth: 12,
@@ -21,9 +22,9 @@ const blankInvestment = (): CreateInvestmentRequest => ({
 function countFilled(extraction: IcMemoExtraction): number {
   const values = [
     ...Object.values(extraction.investment),
-    ...Object.entries(extraction.icCase).filter(([key]) => key !== 'tranches').map(([, value]) => value),
+    ...Object.entries(extraction.icCase).filter(([key]) => key !== 'tranches' && key !== 'financials').map(([, value]) => value),
   ];
-  return values.filter((value) => value !== null).length + (extraction.icCase.tranches.length ? 1 : 0);
+  return values.filter((value) => value !== null).length + (extraction.icCase.tranches.length ? 1 : 0) + (extraction.icCase.financials.length ? 1 : 0);
 }
 
 export default function NewInvestmentPage() {
@@ -39,13 +40,17 @@ export default function NewInvestmentPage() {
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
 
-  const pages = useMemo(() => pagesFromSources(extraction?.sources ?? [], (f) => f.replace(/^icCase\.tranches.*/, 'icCase.tranches')), [extraction]);
+  const pages = useMemo(
+    () => pagesFromSources(extraction?.sources ?? [], (f) => f.replace(/^icCase\.tranches.*/, 'icCase.tranches').replace(/^icCase\.financials.*/, 'icCase.financials')),
+    [extraction],
+  );
   const set = <K extends keyof CreateInvestmentRequest>(key: K, value: CreateInvestmentRequest[K]) => setForm((f) => ({ ...f, [key]: value }));
 
   const onExtracted = useCallback((result: IcMemoExtraction) => {
     setExtraction(result);
     setForm((current) => ({
       companyName: result.investment.companyName ?? current.companyName,
+      businessSummary: result.investment.businessSummary ?? current.businessSummary,
       sector: result.investment.sector ?? current.sector,
       geography: result.investment.geography ?? current.geography,
       fiscalYearEndMonth: result.investment.fiscalYearEndMonth ?? current.fiscalYearEndMonth,

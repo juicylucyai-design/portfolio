@@ -65,6 +65,13 @@ export interface IcTrancheInput {
   milestone?: string | null;
 }
 
+/** One year of the IC memo's financial projections. Revenue and EBITDA can each be null if the memo only gives one. */
+export interface IcFinancialInput {
+  year: number;
+  revenueUsd: number | null;
+  ebitdaUsd: number | null;
+}
+
 export interface IcCaseInput {
   approvedOn: string; // YYYY-MM-DD
   entryPostMoneyUsd: number;
@@ -74,6 +81,7 @@ export interface IcCaseInput {
   exitValuationUsd: number;
   notes?: string | null;
   tranches: IcTrancheInput[];
+  financials: IcFinancialInput[];
 }
 
 export interface IcProjection {
@@ -105,6 +113,7 @@ export interface IcCase extends IcProjection {
   createdBy: string | null;
   createdAt: string;
   tranches: IcTranche[];
+  financials: IcFinancialInput[];
 }
 
 export interface IcCaseSummary {
@@ -120,6 +129,7 @@ export interface IcCaseSummary {
   entryOwnershipPct: number;
   dilutionToExitPct: number;
   tranches: IcTranche[];
+  financials: IcFinancialInput[];
 }
 
 // ---- Closing: what actually happened. Replaces the IC approval as the record of the transaction. ----
@@ -217,6 +227,75 @@ export interface SaveCapitalEventRequest {
 export interface SaveCapitalEventResponse {
   capitalEvent: CapitalEvent;
   document: DocumentInfo | null;
+}
+
+// ---- Financial actuals: quarterly and annual statements, compared against the IC memo's projections ----
+
+export type FinancialPeriodType = 'QUARTERLY' | 'ANNUAL';
+
+export interface FinancialActualInput {
+  periodType: FinancialPeriodType;
+  fiscalYear: number;
+  /** 1–4 for a QUARTERLY statement, null for an ANNUAL one. */
+  quarter: number | null;
+  periodEndDate: string; // YYYY-MM-DD
+  revenueUsd: number | null;
+  ebitdaUsd: number | null;
+  notes?: string | null;
+}
+
+export interface FinancialActual extends FinancialActualInput {
+  id: number;
+  investmentId: number;
+  createdBy: string | null;
+  createdAt: string;
+}
+
+export interface SaveFinancialActualRequest {
+  /** The uploaded statement (PDF), or null to record it without one. */
+  documentId: number | null;
+  financialActual: FinancialActualInput;
+}
+
+export interface SaveFinancialActualResponse {
+  financialActual: FinancialActual;
+  document: DocumentInfo | null;
+}
+
+export type ExpectationStatus = 'BEATING' | 'MEETING' | 'BELOW';
+
+/** One fiscal year's projected-vs-actual revenue and EBITDA, with a status per metric. Null status means
+ *  there's nothing to compare yet (no projection, or no actual reported for that year). */
+export interface YearComparison {
+  year: number;
+  projectedRevenueUsd: number | null;
+  projectedEbitdaUsd: number | null;
+  /** Annual actual if one was reported; otherwise the sum of whatever quarters have been reported. */
+  actualRevenueUsd: number | null;
+  actualEbitdaUsd: number | null;
+  /** How many quarters make up the actual figures above; 0 when it's a full annual actual (or no actual). */
+  quartersReported: number;
+  revenueStatus: ExpectationStatus | null;
+  ebitdaStatus: ExpectationStatus | null;
+}
+
+export interface ExtractedFinancialStatement {
+  periodType: FinancialPeriodType | null;
+  fiscalYear: number | null;
+  quarter: number | null;
+  periodEndDate: string | null;
+  revenueUsd: number | null;
+  ebitdaUsd: number | null;
+}
+
+/** Everything Claude could read from a quarterly or annual financial statement. */
+export interface FinancialStatementExtraction {
+  extractionId: number;
+  documentId: number;
+  model: string;
+  statement: ExtractedFinancialStatement;
+  sources: { field: string; page: number | null; quote: string }[];
+  warnings: string[];
 }
 
 // ---- Carry: the deal-team incentive plan ----
@@ -340,6 +419,12 @@ export interface ExtractedTranche {
   milestone: string | null;
 }
 
+export interface ExtractedFinancial {
+  year: number | null;
+  revenueUsd: number | null;
+  ebitdaUsd: number | null;
+}
+
 /** Everything Claude could read from an IC memo. Every value can be null when the memo doesn't state it. */
 export interface IcMemoExtraction {
   extractionId: number;
@@ -363,6 +448,7 @@ export interface IcMemoExtraction {
     exitValuationUsd: number | null;
     notes: string | null;
     tranches: ExtractedTranche[];
+    financials: ExtractedFinancial[];
   };
   /** Returns as written in the memo, to compare with what the app calculates. */
   statedReturns: { irrPct: number | null; moic: number | null };

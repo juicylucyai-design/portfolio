@@ -11,12 +11,15 @@ import type {
   SaveCapitalEventResponse,
   SaveClosingsRequest,
   SaveClosingsResponse,
+  SaveFinancialActualRequest,
+  SaveFinancialActualResponse,
   SessionUser,
 } from '@nksq/contracts';
 import { CapitalEventService } from '../capital-event';
 import { CarryService } from '../carry';
 import { ClosingService } from '../closing';
 import { DocumentsService } from '../documents';
+import { FinancialActualService } from '../financial-actual';
 import { IcCaseService } from '../ic-case';
 import { IntakeService } from '../intake';
 import { PortfolioService } from '../portfolio';
@@ -40,6 +43,7 @@ export class LifecycleService implements OnModuleInit, OnModuleDestroy {
     private readonly capitalEvents: CapitalEventService,
     private readonly carry: CarryService,
     private readonly documents: DocumentsService,
+    private readonly financialActuals: FinancialActualService,
     private readonly intake: IntakeService,
   ) {}
 
@@ -144,6 +148,39 @@ export class LifecycleService implements OnModuleInit, OnModuleDestroy {
     return { documentsDeleted: documents.count };
   }
 
+  /** Records a quarterly or annual financial statement, attaching the uploaded statement, if any, as evidence. */
+  async saveFinancialActual(investmentId: number, request: SaveFinancialActualRequest, user: SessionUser): Promise<SaveFinancialActualResponse> {
+    if (request.documentId !== null) {
+      const upload = await this.documents.assertUnattached(request.documentId);
+      if (upload.category !== 'STATEMENT') throw new BadRequestException('That document was not uploaded as a financial statement.');
+    }
+
+    const financialActual = await this.financialActuals.record(investmentId, request.financialActual, user);
+    let document: DocumentInfo | null = null;
+    try {
+      if (request.documentId !== null) {
+        document = await this.documents.attachToInvestment(request.documentId, investmentId, { type: 'FINANCIAL_ACTUAL', id: financialActual.id });
+      }
+    } catch (error) {
+      await this.financialActuals.delete(investmentId, financialActual.id).catch(() => undefined);
+      throw error;
+    }
+
+    this.logger.log(`${user.username} recorded a financial statement (${financialActual.periodType} FY${financialActual.fiscalYear}) on investment ${investmentId}`);
+    return { financialActual, document };
+  }
+
+  /** Deletes one financial actual with its evidence document and what Claude read from it. */
+  async deleteFinancialActual(investmentId: number, id: number, user: SessionUser): Promise<{ documentsDeleted: number }> {
+    const actual = await this.financialActuals.get(investmentId, id);
+    const documentIds = await this.documents.idsForRecord('FINANCIAL_ACTUAL', id);
+    await this.intake.deleteForDocuments(documentIds);
+    const documents = await this.documents.deleteByIds(documentIds);
+    await this.financialActuals.delete(investmentId, id);
+    this.logger.log(`${user.username} deleted a financial statement (${actual.periodType} FY${actual.fiscalYear}) on investment ${investmentId} (${documents.count} documents)`);
+    return { documentsDeleted: documents.count };
+  }
+
   /**
    * Deletes an investment and everything held for it: closings and expenses, capital events, IC versions and
    * tranches, documents and their files, and Claude extractions of those documents. Runs from the leaves inward,
@@ -160,6 +197,7 @@ export class LifecycleService implements OnModuleInit, OnModuleDestroy {
     const documents = await this.documents.deleteByIds(documentIds);
     const closingsDeleted = await this.closings.deleteForInvestment(investmentId);
     await this.capitalEvents.deleteForInvestment(investmentId);
+    await this.financialActuals.deleteForInvestment(investmentId);
     await this.carry.deleteForInvestment(investmentId);
     const icCasesDeleted = await this.icCases.deleteForInvestment(investmentId);
     await this.portfolio.delete(investmentId);

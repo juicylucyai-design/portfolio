@@ -131,9 +131,6 @@ export default function DashboardPage() {
                         <Link href={href} onClick={(e) => e.stopPropagation()}>
                           <strong>{investment.companyName}</strong>
                         </Link>
-                        <div className="subtle" style={{ fontSize: 13 }}>
-                          {[investment.instrument, investment.sector, investment.geography].filter(Boolean).join(' · ')}
-                        </div>
                       </td>
                       <td>
                         <span className={`pill ${investment.status}`}>{STATUS_LABELS[investment.status]}</span>

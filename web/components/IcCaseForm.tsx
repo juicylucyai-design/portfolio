@@ -14,6 +14,13 @@ export interface TrancheDraft {
   milestone: string;
 }
 
+export interface FinancialDraft {
+  key: number;
+  year: string;
+  revenue: string;
+  ebitda: string;
+}
+
 export interface IcDraft {
   approvedOn: string;
   entryPostMoney: string;
@@ -23,9 +30,11 @@ export interface IcDraft {
   exitValuation: string;
   notes: string;
   tranches: TrancheDraft[];
+  financials: FinancialDraft[];
 }
 
 let trancheKey = 0;
+let financialKey = 0;
 const today = () => new Date().toISOString().slice(0, 10);
 const money = (value: number | null) => (value === null ? '' : groupDigits(String(value)));
 const plain = (value: number | null) => (value === null ? '' : String(value));
@@ -40,6 +49,7 @@ export function emptyIcDraft(): IcDraft {
     exitValuation: '',
     notes: '',
     tranches: [{ key: trancheKey++, amount: '', expectedDate: today(), milestone: '' }],
+    financials: [],
   };
 }
 
@@ -53,6 +63,7 @@ export function icDraftFromCase(previous: IcCase): IcDraft {
     exitValuation: money(previous.exitValuationUsd),
     notes: '',
     tranches: previous.tranches.map((t) => ({ key: trancheKey++, amount: money(t.amountUsd), expectedDate: t.expectedDate, milestone: t.milestone ?? '' })),
+    financials: previous.financials.map((f) => ({ key: financialKey++, year: String(f.year), revenue: money(f.revenueUsd), ebitda: money(f.ebitdaUsd) })),
   };
 }
 
@@ -69,6 +80,9 @@ export function icDraftFromExtraction(extracted: IcMemoExtraction['icCase']): Ic
     tranches: extracted.tranches.length
       ? extracted.tranches.map((t) => ({ key: trancheKey++, amount: money(t.amountUsd), expectedDate: t.expectedDate ?? '', milestone: t.milestone ?? '' }))
       : fallback.tranches.map((t) => ({ ...t, expectedDate: '' })),
+    financials: extracted.financials
+      .filter((f) => f.year !== null)
+      .map((f) => ({ key: financialKey++, year: String(f.year), revenue: money(f.revenueUsd), ebitda: money(f.ebitdaUsd) })),
   };
 }
 
@@ -82,6 +96,10 @@ export function icDraftToInput(draft: IcDraft): IcCaseInput | null {
   const tranches = draft.tranches.map((t) => ({ amountUsd: parseAmount(t.amount), expectedDate: t.expectedDate, milestone: t.milestone.trim() || null }));
   if (!draft.approvedOn || entryPostMoneyUsd === null || entryOwnershipPct === null || exitValuationUsd === null || !Number.isInteger(exitYear)) return null;
   if (tranches.some((t) => t.amountUsd === null || !t.expectedDate)) return null;
+  const financials = draft.financials
+    .filter((f) => f.year.trim() !== '')
+    .map((f) => ({ year: Number(f.year), revenueUsd: parseAmount(f.revenue), ebitdaUsd: parseAmount(f.ebitda) }));
+  if (financials.some((f) => !Number.isInteger(f.year))) return null;
   return {
     approvedOn: draft.approvedOn,
     entryPostMoneyUsd,
@@ -91,6 +109,7 @@ export function icDraftToInput(draft: IcDraft): IcCaseInput | null {
     exitValuationUsd,
     notes: draft.notes.trim() || null,
     tranches: tranches.map((t) => ({ ...t, amountUsd: t.amountUsd as number })),
+    financials,
   };
 }
 
@@ -107,9 +126,11 @@ function Label({ htmlFor, children, page }: { htmlFor: string; children: ReactNo
 }
 
 export function IcCaseFields({ draft, onChange, pages = {} }: { draft: IcDraft; onChange: (draft: IcDraft) => void; pages?: Record<string, number> }) {
-  const set = (key: keyof Omit<IcDraft, 'tranches'>, value: string) => onChange({ ...draft, [key]: value });
+  const set = (key: keyof Omit<IcDraft, 'tranches' | 'financials'>, value: string) => onChange({ ...draft, [key]: value });
   const setTranche = (key: number, field: keyof Omit<TrancheDraft, 'key'>, value: string) =>
     onChange({ ...draft, tranches: draft.tranches.map((t) => (t.key === key ? { ...t, [field]: value } : t)) });
+  const setFinancial = (key: number, field: keyof Omit<FinancialDraft, 'key'>, value: string) =>
+    onChange({ ...draft, financials: draft.financials.map((f) => (f.key === key ? { ...f, [field]: value } : f)) });
 
   const commitment = draft.tranches.reduce((sum, t) => sum + (parseAmount(t.amount) ?? 0), 0);
   const postMoney = parseAmount(draft.entryPostMoney);
@@ -196,6 +217,71 @@ export function IcCaseFields({ draft, onChange, pages = {} }: { draft: IcDraft; 
             Total commitment <strong style={{ color: 'var(--ink)' }}>{usd(commitment)}</strong>
           </span>
         </div>
+      </div>
+
+      <div style={{ display: 'grid', gap: 8 }}>
+        <h3>
+          Financial projections
+          {pages['icCase.financials'] ? <span className="src">p. {pages['icCase.financials']}</span> : null}
+        </h3>
+        <p className="subtle" style={{ fontSize: 13, margin: 0 }}>
+          Revenue and EBITDA by fiscal year, as stated in the memo. Optional — leave empty if the memo has no year-by-year figures.
+        </p>
+        {draft.financials.length > 0 && (
+          <div className="tranche-row tranche-head" aria-hidden="true">
+            <span />
+            <span>Year</span>
+            <span>Revenue (USD)</span>
+            <span>EBITDA (USD)</span>
+            <span />
+          </div>
+        )}
+        {draft.financials.map((financial, index) => (
+          <div className="tranche-row" key={financial.key}>
+            <span className="n">Y{index + 1}</span>
+            <input
+              aria-label={`Financial projection ${index + 1} year`}
+              className="input num"
+              inputMode="numeric"
+              value={financial.year}
+              onChange={(e) => setFinancial(financial.key, 'year', e.target.value.replace(/\D/g, '').slice(0, 4))}
+            />
+            <input
+              aria-label={`Financial projection ${index + 1} revenue`}
+              className="input num"
+              inputMode="decimal"
+              value={financial.revenue}
+              onChange={(e) => setFinancial(financial.key, 'revenue', groupDigits(e.target.value))}
+            />
+            <input
+              aria-label={`Financial projection ${index + 1} EBITDA`}
+              className="input num"
+              inputMode="decimal"
+              value={financial.ebitda}
+              onChange={(e) => setFinancial(financial.key, 'ebitda', groupDigits(e.target.value))}
+            />
+            <button
+              type="button"
+              className="btn btn-ghost btn-small"
+              aria-label={`Remove financial projection ${index + 1}`}
+              onClick={() => onChange({ ...draft, financials: draft.financials.filter((f) => f.key !== financial.key) })}
+            >
+              ✕
+            </button>
+          </div>
+        ))}
+        <button
+          type="button"
+          className="btn btn-small"
+          style={{ justifySelf: 'start' }}
+          onClick={() => {
+            const lastYear = Number(draft.financials.at(-1)?.year);
+            const nextYear = Number.isInteger(lastYear) ? String(lastYear + 1) : String(new Date().getFullYear());
+            onChange({ ...draft, financials: [...draft.financials, { key: financialKey++, year: nextYear, revenue: '', ebitda: '' }] });
+          }}
+        >
+          Add year
+        </button>
       </div>
 
       <div className="field">
