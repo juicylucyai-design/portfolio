@@ -16,6 +16,7 @@
     "dev:server": "npm run dev -w server",
     "dev:web": "npm run dev -w web",
     "db:local": "pglite-server --db=./.local-db --port=5432",
+    "staging": "node scripts/staging.mjs",
     "test": "npm test -w server",
     "check:boundaries": "depcruise server/src web/app web/components web/lib --config .dependency-cruiser.cjs",
     "typecheck": "npm run typecheck -w server && npm run typecheck -w web"

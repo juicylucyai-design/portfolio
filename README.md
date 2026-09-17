@@ -136,6 +136,18 @@ npm start                  # http://localhost:3000
 
 For live-reloading UI work, run `npm run dev:server` and `npm run dev:web` (http://localhost:3001, API calls are forwarded to :3000).
 
+### Local staging
+
+A persistent local copy of the app, separate from production, on the `staging` branch:
+
+```bash
+npm run build
+npm run staging            # http://localhost:3100, data kept in .staging-db/
+```
+
+Settings (admin user, optional `ANTHROPIC_API_KEY`) go in `.env.staging.local`, which git ignores.
+Delete `.staging-db/` to start over with an empty database.
+
 ## Checks
 
 ```bash

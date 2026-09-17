@@ -4,6 +4,8 @@ web/.next/
 web/out/
 web/next-env.d.ts
 .local-db/
+.staging-db/
+.claude/
 .env
 .env.*
 !.env.example
