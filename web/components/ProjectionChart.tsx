@@ -199,8 +199,8 @@ function MetricChart({ label, color, points, showCagr }: { label: string; color:
   const maxValue = Math.max(0, ...values);
   const minValue = Math.min(0, ...values);
   const range = maxValue - minValue || 1;
-  // Headroom above the tallest bar for its value label and, above that, the status badge.
-  const y = (value: number) => MARGIN.top + 30 + (PLOT_HEIGHT - 30) * (1 - (value - minValue) / range);
+  // Headroom above the tallest bar for its bold value label and, above that, the status badge.
+  const y = (value: number) => MARGIN.top + 34 + (PLOT_HEIGHT - 34) * (1 - (value - minValue) / range);
   const zeroY = y(0);
 
   const groupWidth = PLOT_WIDTH / points.length;
@@ -225,8 +225,16 @@ function MetricChart({ label, color, points, showCagr }: { label: string; color:
       <svg viewBox={`0 0 ${WIDTH} ${HEIGHT}`} role="img" aria-label={`Projected vs actual ${label}`} style={{ width: '100%', height: 'auto' }}>
         {ticks.map((tick) => (
           <g key={tick}>
-            <line x1={MARGIN.left} x2={WIDTH - MARGIN.right} y1={y(tick)} y2={y(tick)} stroke="var(--rule)" strokeWidth={tick === 0 ? 1.5 : 1} />
-            <text x={MARGIN.left - 10} y={y(tick)} textAnchor="end" dominantBaseline="middle" fontSize={12} fill="var(--muted)">
+            <line
+              x1={MARGIN.left}
+              x2={WIDTH - MARGIN.right}
+              y1={y(tick)}
+              y2={y(tick)}
+              stroke="var(--rule)"
+              strokeWidth={tick === 0 ? 1.5 : 1}
+              opacity={tick === 0 ? 1 : 0.45}
+            />
+            <text x={MARGIN.left - 10} y={y(tick)} textAnchor="end" dominantBaseline="middle" fontSize={11.5} fill="var(--muted)">
               {usdCompact(tick)}
             </text>
           </g>
@@ -269,14 +277,15 @@ function MetricChart({ label, color, points, showCagr }: { label: string; color:
                   rx={3}
                 />
               )}
-              {/* One value label per year, on the more interesting figure (the actual, once there is one). */}
+              {/* One value label per year, on the more interesting figure (the actual, once there is one) — the
+                  headline number the whole chart exists to show, so it reads bolder than everything around it. */}
               {headlineValue !== null && (
-                <text x={centre} y={headlineValue >= 0 ? headlineTop - 8 : headlineTop + 16} textAnchor="middle" fontSize={11} fill="var(--ink)">
+                <text x={centre} y={headlineValue >= 0 ? headlineTop - 9 : headlineTop + 18} textAnchor="middle" fontSize={13.5} fontWeight={700} fill="var(--ink)">
                   {usdCompact(headlineValue)}
                 </text>
               )}
               {p.status && (
-                <text x={centre} y={bothTop - 22} textAnchor="middle" fontSize={11} fontWeight={700} fill={STATUS_COLOR[p.status]}>
+                <text x={centre} y={bothTop - 25} textAnchor="middle" fontSize={10.5} fontWeight={600} fill={STATUS_COLOR[p.status]}>
                   {STATUS_LABEL[p.status]}
                 </text>
               )}
