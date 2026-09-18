@@ -28,7 +28,7 @@ export default function LoginPage() {
       <div className="login-card">
         <div className="login-brand">
           <span className="brand-mark" aria-hidden="true">N</span>
-          <h1>NKSquared Portfolio Manager</h1>
+          <h1>NKSquared International Portfolio Manager</h1>
           <p className="subtle">Sign in to see the portfolio.</p>
         </div>
         <form className="panel" onSubmit={submit}>
