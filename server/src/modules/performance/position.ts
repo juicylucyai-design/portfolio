@@ -122,7 +122,7 @@ function computeFromClosingsAndIc(investmentId: number, closings: ClosingFigures
     return position;
   }
 
-  const proceeds = roundUsd(ic.exitValuationUsd * (latest.ownershipPctAfter / 100) * (1 - ic.dilutionToExitPct / 100));
+  const proceeds = roundUsd(ic.exitValuationUsd * (Math.max(0, latest.ownershipPctAfter - ic.dilutionToExitPct) / 100));
   const exitDate = `${ic.exitYear}-12-31`;
   position.projectedProceedsUsd = proceeds;
   position.projectedMoic = roundTo(moic(costUsd, proceeds) ?? 0, 4);

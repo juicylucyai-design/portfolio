@@ -162,9 +162,9 @@ export function IcCaseFields({ draft, onChange, pages = {} }: { draft: IcDraft; 
           <Label htmlFor="dilutionToExit" page={pages['icCase.dilutionToExitPct']}>Expected dilution to exit</Label>
           <div className="input-affix suffix">
             <input id="dilutionToExit" className="input num" inputMode="decimal" value={draft.dilutionToExit} onChange={(e) => set('dilutionToExit', e.target.value)} />
-            <span className="post">%</span>
+            <span className="post">points</span>
           </div>
-          <span className="hint">From future rounds before exit.</span>
+          <span className="hint">Percentage points of ownership given up to future rounds before exit (entry 20%, exit 15% → 5).</span>
         </div>
         <div className="field">
           <Label htmlFor="exitYear" page={pages['icCase.exitYear']}>Exit year</Label>

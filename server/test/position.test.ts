@@ -15,7 +15,7 @@ const ic: IcCaseSummary = {
   exitValuationUsd: 200_000_000,
   entryPostMoneyUsd: 50_000_000,
   entryOwnershipPct: 20,
-  dilutionToExitPct: 25,
+  dilutionToExitPct: 5,
   tranches: [
     { trancheNumber: 1, amountUsd: 6_000_000, expectedDate: '2026-09-01', milestone: null },
     { trancheNumber: 2, amountUsd: 4_000_000, expectedDate: '2027-06-01', milestone: null },
@@ -52,14 +52,14 @@ test('closings replace the IC figures: actual cost with expenses, actual ownersh
   assert.equal(position.sharesHeld, 98_000);
   assert.equal(position.ownershipPct, 18.9, 'ownership is the latest closing, not the IC entry ownership');
   assert.equal(position.undrawnCommitmentUsd, 0, 'both tranches have a closing, so nothing is left to draw even though tranche 2 closed for less than approved');
-  // 200M exit × 18.9% × (1 − 25%) = 28.35M
-  assert.equal(position.projectedProceedsUsd, 28_350_000);
-  assert.equal(position.projectedMoic, Math.round((28_350_000 / 9_970_000) * 10000) / 10000);
+  // 200M exit × (18.9 − 5 points) = 27.8M
+  assert.equal(position.projectedProceedsUsd, 27_800_000);
+  assert.equal(position.projectedMoic, Math.round((27_800_000 / 9_970_000) * 10000) / 10000);
   assert.ok(position.projectedIrr !== null);
   const flows = [
     { date: '2026-09-30', amount: -6_150_000 },
     { date: '2027-07-15', amount: -3_820_000 },
-    { date: '2031-12-31', amount: 28_350_000 },
+    { date: '2031-12-31', amount: 27_800_000 },
   ];
   assert.ok(Math.abs(npv(position.projectedIrr, flows)) < 50, 'IRR discounts actual closing cash flows, expenses included');
 });

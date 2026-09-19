@@ -20,12 +20,12 @@ test('single tranche: $10M for 20%, exit at $125M valuation in 2030', () => {
   assert.ok(projection.projectedIrr !== null && Math.abs(projection.projectedIrr - 0.25722) < 0.0001);
 });
 
-test('three tranches with 25% dilution to exit', () => {
+test('three tranches with 5 points of dilution to exit', () => {
   const projection = projectIcCase({
     approvedOn: '2025-12-10',
     entryPostMoneyUsd: 50_000_000,
     entryOwnershipPct: 20,
-    dilutionToExitPct: 25,
+    dilutionToExitPct: 5,
     exitYear: 2031,
     exitValuationUsd: 200_000_000,
     tranches: [
@@ -40,6 +40,22 @@ test('three tranches with 25% dilution to exit', () => {
   assert.equal(projection.projectedProceedsUsd, 30_000_000);
   assert.equal(projection.projectedMoic, 3);
   assert.ok(projection.projectedIrr !== null && projection.projectedIrr > 0.2 && projection.projectedIrr < 0.3);
+});
+
+test('dilution bigger than the entry stake floors ownership at exit at zero, not negative', () => {
+  const projection = projectIcCase({
+    approvedOn: '2026-01-01',
+    entryPostMoneyUsd: 50_000_000,
+    entryOwnershipPct: 20,
+    dilutionToExitPct: 30,
+    exitYear: 2030,
+    exitValuationUsd: 100_000_000,
+    tranches: [{ amountUsd: 10_000_000, expectedDate: '2026-12-31' }],
+    financials: [],
+  });
+  assert.equal(projection.exitOwnershipPct, 0);
+  assert.equal(projection.projectedProceedsUsd, 0);
+  assert.equal(projection.projectedMoic, 0);
 });
 
 test('zero exit valuation projects a total loss with no IRR', () => {

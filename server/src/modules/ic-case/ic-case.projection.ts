@@ -8,12 +8,14 @@ export const exitDateFor = (exitYear: number) => `${exitYear}-12-31`;
 /**
  * What the IC case projects, from its inputs alone:
  * - commitment = sum of the tranches
- * - proceeds   = exit valuation × entry ownership × (1 − dilution to exit)
+ * - proceeds   = exit valuation × ownership at exit
+ * - ownership at exit = entry ownership − dilution to exit, in percentage points (floored at zero: dilution
+ *   can't take a stake below nothing, even if someone enters a dilution figure bigger than the entry stake)
  * - IRR        = XIRR of each tranche paid on its expected date, and proceeds received at exit
  */
 export function projectIcCase(input: IcCaseInput): IcProjection {
   const commitmentUsd = sumUsd(input.tranches.map((tranche) => tranche.amountUsd));
-  const exitOwnershipFraction = (input.entryOwnershipPct / 100) * (1 - input.dilutionToExitPct / 100);
+  const exitOwnershipFraction = Math.max(0, input.entryOwnershipPct - input.dilutionToExitPct) / 100;
   const projectedProceedsUsd = roundUsd(input.exitValuationUsd * exitOwnershipFraction);
   const exitDate = exitDateFor(input.exitYear);
 

@@ -4,7 +4,7 @@ import { asRecord, createReaders, object, readSources, readWarnings, SOURCES_SCH
 // What Claude is asked to read from an IC memo, and how its answer is checked before anyone sees it.
 // Bump the prompt version whenever the prompt or schema changes; it's stored with every extraction.
 
-export const IC_MEMO_PROMPT_VERSION = 'ic-memo-2026-09-17d';
+export const IC_MEMO_PROMPT_VERSION = 'ic-memo-2026-09-19a';
 
 /** Keep in step with the instrument list on the New investment page. */
 export const INSTRUMENTS = ['Preferred equity', 'Common equity', 'SAFE', 'Convertible note', 'Venture debt', 'Fund commitment', 'Other'];
@@ -57,7 +57,7 @@ Field meanings:
 - icCase.approvedOn: the date of the IC meeting or approval. If only the memo's own date is given, use it and add a warning saying so.
 - icCase.entryPostMoneyUsd: the company's post-money valuation at NKSquared's entry.
 - icCase.entryOwnershipPct: NKSquared's fully diluted ownership at entry, as a percentage from 0 to 100.
-- icCase.dilutionToExitPct: expected dilution from future rounds before exit, as a percentage from 0 to 100. If the memo gives ownership at entry and at exit instead, compute 100 × (1 − exit ÷ entry). If it says nothing about dilution, leave it empty.
+- icCase.dilutionToExitPct: expected dilution from future rounds before exit, in percentage points of ownership NKSquared expects to give up (e.g. entry ownership 20%, exit ownership 15% → dilution is 5, not 25). If the memo gives ownership at entry and at exit instead, compute entry − exit directly (both already percentages of the same base). If it says nothing about dilution, leave it empty.
 - icCase.exitYear: the calendar year of the projected exit. If the memo gives a holding period instead, add it to the expected closing year.
 - icCase.exitValuationUsd: the company's equity valuation at exit. If the memo only gives NKSquared's exit proceeds and ownership at exit, derive valuation = proceeds ÷ ownership at exit, and add a warning describing the derivation.
 - icCase.tranches: each planned payment by NKSquared, with its amount and expected date, in order. A single upfront investment is one tranche dated at the expected closing (or the approval date if no closing date is given). Put any condition for release, such as a milestone, in milestone.
